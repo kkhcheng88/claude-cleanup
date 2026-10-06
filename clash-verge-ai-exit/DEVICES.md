@@ -1,7 +1,7 @@
 # 裝置設定與驗證
 
-同一份 `mobile-clash.yaml` 可用於 iOS（Stash）與 Android（CMFA），
-**三台裝置必須使用同一顆出口 IP** —— 這樣同一個帳號在任何裝置上看起來都是同一個人。
+同一份 `mobile-clash.yaml` 可用於 iOS（Stash）與 Android（CMFA）。
+**三台裝置使用同一個出口 IP**，讓同一個帳號在任何裝置上看起來都是同一個來源。
 
 ---
 
@@ -26,19 +26,19 @@
 | 項目 | 位置 | 動作 |
 |---|---|---|
 | **保持常駐** | Stash → 設定 | **開啟**（等於 iOS 版的隨選連線） |
-| iCloud+ **私密轉送**（若你有訂閱 iCloud+） | 設定 → Apple ID → iCloud → 私密轉送 | **關閉**（會讓 Safari 繞過你的出口） |
-| **限制 IP 位址追蹤** | 設定 → Wi-Fi → 該網路 ⓘ | **關閉** |
-| **地區 / 時區** | 設定 → 一般 → 語言與地區 | 地區＝支援國家、時區＝對應城市 |
-| 低耗電模式 | 設定 → 電池 | 使用 AI 服務時盡量關閉（可能讓 VPN 被回收） |
+| iCloud+ **私密轉送**（若你有訂閱 iCloud+） | 設定 → Apple ID → iCloud → 私密轉送 | **關閉**（否則 Safari 會走 Apple 的中繼路徑） |
+| **限制 IP 位址追蹤** | 設定 → Wi-Fi → 該網路 ⓘ | **關閉**（同上，會改變 Safari 的出口） |
+| **時區 / 地區** | 設定 → 一般 → 語言與地區 | 與你的出口國家一致 |
+| 低耗電模式 | 設定 → 電池 | 使用時盡量關閉（可能讓 VPN 被系統回收） |
 | 背景 App 重新整理 | 設定 → 一般 → 背景 App 重新整理 | 允許 Stash |
 
 ### A5. 驗證（Safari）
 ```
-① <ipinfo>/ip 的等價： https://ipinfo.io/ip                 → 必須是代理 IP
-② https://claude.ai/cdn-cgi/trace                          → loc=<支援國家>
-③ https://claude.ai                                     → 正常開（第一次可能過一次 CF）
+① https://ipinfo.io/ip                → 必須是代理 IP
+② https://claude.ai/cdn-cgi/trace     → ip= 是代理 IP、loc= 是你預期的國家
+③ https://claude.ai                   → 正常開（第一次可能過一次 Cloudflare 驗證）
 ```
-第 ③ 關若出現「不支援你的地區」＝**洩漏**（多半是 QUIC 或 VPN 掉了）。
+若 ③ 出現地區限制或服務不可用，但 ①② 正常 → **代表有旁路洩漏**（多半是 QUIC 或 VPN 掉了）。
 
 ---
 
@@ -49,7 +49,7 @@
 - **選 `arm64-v8a`**（2016 年後的裝置幾乎都是；裝不起來才換 `armeabi-v7a`）
 - Android 會問「允許安裝未知應用程式」→ 允許
 
-### B2. 匯入（若選擇器看不到 `.yaml`）
+### B2. 匯入（若檔案選擇器看不到 `.yaml`）
 1. 把 `mobile-clash.yaml` 放到裝置的 **Download** 資料夾
 2. CMFA → **設定檔 → `+` → Import from file**
 3. 在選擇器裡：**左上 ☰ →「顯示內部儲存空間」** → 選 **Internal storage → Download** → 選檔案
@@ -58,7 +58,7 @@
      ```powershell
      & "<python.exe 路徑>" -m http.server 8000 --directory "<這個資料夾>"
      ```
-   - 查電腦的區網 IP：`ipconfig` → 找**使用中的網卡**（**不要用 `198.18.x.x`，那是 Clash 虛擬網卡**）
+   - 查電腦的區網 IP：`ipconfig` → 找**正在使用的網卡**（**不要用 `198.18.x.x`，那是 Clash 的虛擬網卡**）
    - CMFA → Import from URL → `http://<區網IP>:8000/mobile-clash.yaml`
    - 手機與電腦要在**同一個 Wi-Fi**；Windows 防火牆要允許 Python（私人網路）
    - 匯入完 **Ctrl + C 關掉服務**
@@ -66,20 +66,20 @@
 ### B3. 啟動
 CMFA → 點一下該設定檔 → 選為使用中 → 回主畫面開啟開關 → 允許 VPN 權限
 
-### B4. 必做系統設定（**這裡比 iOS 多一層保護**）
+### B4. 必做系統設定
 | 項目 | 位置 | 動作 |
 |---|---|---|
 | **一律開啟的 VPN** | 設定 → 網路與網際網路 → VPN → CMFA ⚙️ | **開** |
-| **封鎖沒有 VPN 的連線** ⭐ | 同上一頁 | **開** ← VPN 一斷就全部封鎖，Claude 不會從真實 IP 溜出去（fail-closed） |
+| **封鎖沒有 VPN 的連線** ⭐ | 同上一頁 | **開** ← VPN 一斷就全部封鎖，不會從非預期路徑連出去（fail-closed） |
 | **電池 → 不受限制** | 設定 → 應用程式 → Clash Meta → 電池 | 開 |
 | **私人 DNS** | 設定 → 網路與網際網路 → 私人 DNS | 「自動」或關閉 |
 | 時區 / 地區 | 設定 → 系統 → 日期與時間 / 語言 | 與出口國家一致 |
 
 ### B5. 驗證
-與 A5 相同三關；另外可在 CMFA 的**連線記錄**確認 Claude / ChatGPT 相關條目的「策略」欄是 **`AI-Exit`**（不是 `DIRECT`）。
+與 A5 相同三關；另外可在 CMFA 的**連線記錄**確認目標服務相關條目的「策略」欄是 **`AI-Exit`**（不是 `DIRECT`）。
 
 > 桌面版的 `PROCESS-NAME-REGEX` 安全網**在手機上不存在**（手機不支援程序名稱規則），
-> 所以手機端完全依賴**域名清單**。若在連線記錄看到「Claude 相關但走 DIRECT」的域名，
+> 所以手機端完全依賴**域名清單**。若在連線記錄看到「目標服務相關但走 DIRECT」的域名，
 > 請把它加進 `configs/enh-rules.ai-exit.yaml` 與 `configs/mobile-clash.template.yaml`，然後重新安裝。
 
 ---
@@ -90,9 +90,9 @@ CMFA → 點一下該設定檔 → 選為使用中 → 回主畫面開啟開關 
 |---|---|---|
 | **QUIC** | `edge://flags/#enable-quic` / `chrome://flags/#enable-quic` | **Disabled**（改完完全重開瀏覽器；大版本更新後要回來檢查） |
 | 不要裝的擴充 | — | VPN / 代理 / 網路加速 / **指紋或 UA 偽裝** 類 |
-| Cookie 紀律 | — | 不要清 `claude.ai` cookie、不要用無痕當日常 |
+| Cookie 紀律 | — | 不要清目標網站的 cookie、不要用無痕當日常 |
 
-**不需要指紋瀏覽器**：指紋瀏覽器是為「多帳號」與「自動化」設計的；單一帳號 + 真人操作 + 一致的 IP/時區，用一般瀏覽器最自然。亂套偽裝反而製造矛盾。
+**不需要指紋瀏覽器**：那類工具是為「多組帳號」與「自動化」設計的。單一帳號 + 真人操作 + 一致的 IP／時區，用一般瀏覽器最自然；額外偽裝反而製造不一致的訊號。
 
 ---
 
@@ -107,7 +107,7 @@ CMFA → 點一下該設定檔 → 選為使用中 → 回主畫面開啟開關 
 ```
 
 - 只影響 Claude Code（`npm` / `git` / `pip` 不受影響）
-- Clash Verge 沒開時，Claude Code **直接失敗**（不會用真實 IP 偷偷連出去）
+- Clash Verge 沒開時，Claude Code **直接失敗**（不會從非預期路徑連出去）
 - 驗證方式：在 Claude Code 裡執行 `echo $env:HTTPS_PROXY`
 
 ## E. Codex（沒有逐工具設定）
@@ -119,6 +119,6 @@ CMFA → 點一下該設定檔 → 選為使用中 → 回主畫面開啟開關 
 ## F. 所有裝置共同紀律
 
 1. **不要**把 `AI-Exit` 切成 `DIRECT`、不要改成 `url-test`
-2. **不要**清 cookie、不要用無痕當日常
-3. VPN / Stash / CMFA **保持連線**（斷線的那一刻就會用真實 IP）
-4. 同一個帳號**只在同一條線**上使用
+2. **不要**清目標網站 cookie、不要用無痕當日常
+3. VPN / Stash / CMFA **保持連線**（斷線時流量會走真實路徑）
+4. 同一組帳號**只在同一條線**上使用

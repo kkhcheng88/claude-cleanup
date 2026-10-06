@@ -8,7 +8,7 @@
 #    connect straight to a resolved IP. Without the sniffer, mihomo only
 #    sees an IP address, the domain rules never match, and the traffic
 #    falls through to MATCH,DIRECT - silently leaving through your real
-#    (unsupported-region) IP.
+#    IP instead of the configured exit.
 #    parse-pure-ip = true makes the sniffer read the TLS SNI / HTTP Host
 #    even when the destination is a bare IP, so the rules still match.
 #

@@ -9,9 +9,9 @@
 prepend:
   # ---------- 0. Block QUIC / HTTP3 (UDP 443) ----------
   # WHY: an HTTP proxy cannot carry UDP, and QUIC cannot be matched by
-  # domain rules, so a browser would connect to claude.ai DIRECTLY over
-  # HTTP/3 using the real IP. That is exactly what produced the
-  # "Claude isn't available in your region" page (Cloudflare saw an HK IP).
+  # domain rules, so a browser would connect to the target DIRECTLY over
+  # HTTP/3 using your real IP instead of the configured exit. This is the
+  # most common source of leaks.
   # REJECT forces the browser back to TCP, where the domain rules apply.
   # Remove this line only if some app genuinely needs QUIC.
   - AND,((NETWORK,udp),(DST-PORT,443)),REJECT

@@ -17,7 +17,9 @@
    powershell -ExecutionPolicy Bypass -File .\install.ps1 -IncludeMainProfile
    ```
    代理密碼由使用者輸入（或用 `-SecretsFile`）；**不要**把密碼寫進任何檔案或對話。
-5. 依 `SETUP.md` 第 6～7 節完成：關閉瀏覽器 QUIC、Claude Code 的 `env` 區塊、三關驗證。
+5. 依 `SETUP.md` 第 6～7 節完成：關閉瀏覽器 QUIC、Claude Code 的 `env` 區塊、
+   **Windows 地區／時區一致性檢查**（`check-windows-locale.ps1`，需回報
+   `all settings are consistent`）、三關驗證。
 6. 回報結果時附上三關的實際輸出（IP / `loc` / HTTP code）。
 
 ## 不要做的事
@@ -46,6 +48,7 @@
 | `DEVICES.md` | iOS / Android / 瀏覽器 / Claude Code / Codex |
 | `install.ps1` | 自動安裝（解析 Verge 隨機 uid、渲染範本、備份、驗證） |
 | `show-verge-map.ps1` | 印出 uid ↔ 角色對應（排錯） |
+| `check-windows-locale.ps1` | Windows 地區／時區一致性檢查（`-Apply` 可修正） |
 | `proxy-bench.ps1` | 代理評測（TTFB / loc / colo / ASN） |
 | `configs/` | 所有範本（`__PROXY_*__` 佔位符） |
 | `launchers/` | `codex-p.cmd` / `claude-p.cmd`（fail-closed 啟動器） |

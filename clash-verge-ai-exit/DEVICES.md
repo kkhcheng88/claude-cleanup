@@ -116,7 +116,24 @@ CMFA → 點一下該設定檔 → 選為使用中 → 回主畫面開啟開關 
 
 ---
 
-## F. 所有裝置共同紀律
+## G. Windows 主機（地區／時區一致性）
+
+主機本身就是最重要的一台裝置：**出口在目標國家、裝置卻仍顯示別的時區／地區**，是一種互相矛盾的訊號。
+
+```powershell
+# 唯讀檢查（六項：時區 / 住家位置 / 系統地區 / 使用者格式 / 語言清單 / 時鐘同步）
+powershell -ExecutionPolicy Bypass -File .\check-windows-locale.ps1
+
+# 修正（時區與系統地區需要系統管理員權限；系統地區需重開機、語言清單需重新登入）
+powershell -ExecutionPolicy Bypass -File .\check-windows-locale.ps1 -Apply
+```
+
+通過標準：輸出結尾是 `RESULT: all settings are consistent.`
+（腳本只新增缺少的語言，不會移除既有語言或改掉顯示語言；所有變更都可在 Windows 設定介面還原。）
+
+---
+
+## H. 所有裝置共同紀律
 
 1. **不要**把 `AI-Exit` 切成 `DIRECT`、不要改成 `url-test`
 2. **不要**清目標網站 cookie、不要用無痕當日常

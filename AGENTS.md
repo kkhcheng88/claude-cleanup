@@ -41,6 +41,12 @@ Non-negotiable rules for that module:
 - **Prefer measurements over database guesses**: use
   [`clash-verge-ai-exit/proxy-bench.ps1`](clash-verge-ai-exit/proxy-bench.ps1)
   to compare latency, `loc`, `colo` and whether a challenge is triggered.
+- **Keep the device agreeing with the exit country.** Run
+  [`clash-verge-ai-exit/check-windows-locale.ps1`](clash-verge-ai-exit/check-windows-locale.ps1)
+  as part of setup and require `RESULT: all settings are consistent.` — time zone,
+  home location, system locale, user formats and language list must not contradict
+  the exit country. `-Apply` fixes mismatches (time zone and system locale need
+  Administrator; system locale needs a reboot, language list needs a sign-out).
 - The scope statement in `README.md` describes the **cleanup skill**; the Clash
   package is a network-configuration tool and carries its own prerequisites and
   boundaries (see `SETUP.md` section 11).

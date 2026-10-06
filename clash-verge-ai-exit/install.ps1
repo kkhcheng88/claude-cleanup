@@ -290,4 +290,10 @@ Write-Host @'
 
   6. Claude Code: add the proxy env block to %USERPROFILE%\.claude\settings.json
      (see DEVICES.md).
+
+  7. Windows regional consistency - the device must agree with the exit country:
+       powershell -ExecutionPolicy Bypass -File .\check-windows-locale.ps1
+     It must end with "RESULT: all settings are consistent."
+     Fix mismatches with -Apply (time zone and system locale need Administrator;
+     system locale needs a reboot, language list needs a sign-out).
 '@

@@ -22,6 +22,8 @@ English → [README.md](README.md)
 - [`clash-verge-ai-exit/AGENTS.md`](clash-verge-ai-exit/AGENTS.md) —— 給 agent 的指示
 - [`clash-verge-ai-exit/install.ps1`](clash-verge-ai-exit/install.ps1) —— 自動安裝腳本
   （自動解析 Clash Verge 的隨機 uid 檔名、渲染範本、備份、驗證）
+- [`clash-verge-ai-exit/check-windows-locale.ps1`](clash-verge-ai-exit/check-windows-locale.ps1) ——
+  檢查裝置的時區／地區／格式是否與出口國家一致（`-Apply` 可修正）
 
 代理憑證永不提交：範本使用 `__PROXY_*__` 佔位符，安裝時由使用者輸入。
 

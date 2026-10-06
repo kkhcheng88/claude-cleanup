@@ -25,6 +25,9 @@ It is not part of the cleanup skill and has its own entry points:
 - [`clash-verge-ai-exit/AGENTS.md`](clash-verge-ai-exit/AGENTS.md) — instructions for agents
 - [`clash-verge-ai-exit/install.ps1`](clash-verge-ai-exit/install.ps1) — automated installer
   (resolves Clash Verge's random uid files, renders the templates, backs up, validates)
+- [`clash-verge-ai-exit/check-windows-locale.ps1`](clash-verge-ai-exit/check-windows-locale.ps1) —
+  verifies the device's time zone / region / formats agree with the exit country
+  (`-Apply` fixes mismatches)
 
 Proxy credentials are never committed: the templates use `__PROXY_*__`
 placeholders and the installer asks for the values at run time.

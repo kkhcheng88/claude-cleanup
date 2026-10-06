@@ -100,7 +100,7 @@ rules     r4wn3k0RYL4e.yaml                3364
 
 ---
 
-## 6. 兩個一定要做的外部設定
+## 6. 三個一定要做的外部設定
 
 ### 6.1 關閉瀏覽器 QUIC
 
@@ -125,6 +125,43 @@ rules     r4wn3k0RYL4e.yaml                3364
 效果：只有 Claude Code 走代理（`npm` / `git` / `pip` 完全不受影響）；Clash Verge 沒開時 **Claude Code 直接失敗**，而不是從非預期路徑連出去。
 
 （Codex 沒有逐工具設定 → 用 `launchers\codex-p.cmd` 啟動。詳見 `DEVICES.md`。）
+
+### 6.3 Windows 的地區／時區一致性
+
+出口在目標國家，但裝置仍顯示別的時區／地區，就是一種**互相矛盾的訊號**。用附帶的腳本檢查（**唯讀，不會改任何設定**）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\check-windows-locale.ps1
+```
+
+它檢查六項：時區、住家位置（GeoId）、系統地區、使用者格式、語言清單（比對「語言＋地區」，所以 `zh-Hant-TW` 會被視為符合 `zh-TW`）、時鐘同步。
+
+全部一致時的輸出：
+
+```
+OK        Time zone              current: Taipei Standard Time    expected: Taipei Standard Time
+OK        Home location (GeoId)  current: 237                     expected: 237
+OK        System locale          current: zh-TW                   expected: zh-TW
+OK        User culture (formats) current: zh-TW                   expected: zh-TW
+OK        Language list          current: zh-Hant-TW, en-US       expected: contains zh-TW
+RESULT: all settings are consistent.
+```
+
+要修正（`-Apply`）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\check-windows-locale.ps1 -Apply
+```
+
+| 項目 | 權限 | 生效時機 |
+|---|---|---|
+| 時區 | **系統管理員** | 立即 |
+| 住家位置 | 一般使用者 | 立即 |
+| 系統地區 | **系統管理員** | **需重開機** |
+| 使用者格式 | 一般使用者 | 立即 |
+| 語言清單 | 一般使用者 | **需重新登入** |
+
+（腳本只**新增**缺少的語言，不會移除你原有的語言或改掉顯示語言；所有變更都能在 Windows 設定介面還原。）
 
 ---
 
@@ -161,6 +198,7 @@ curl.exe -x http://127.0.0.1:7897 -s -o NUL -w "%{http_code}`n" https://claude.a
 | 一直卡在 `Just a moment...` 輪迴 | IP 信譽不足，或擴充功能干擾 | ① 向供應商換 IP（指定「本地 ISP ASN」）② 用無痕 + 關閉所有擴充測一次 ③ 確認 `challenges.cloudflare.com` 在規則內 |
 | 第一次很慢、之後很快 | 正常：`cf_clearance` 建立中 | 讓它跑完，**不要清 cookie** |
 | 剛剛還好好的，突然不行 | VPN / Stash / CMFA 掉了 → 走真實 IP | 檢查連線狀態；Android 開「封鎖沒有 VPN 的連線」 |
+| 裝置的地區／時區與出口國家不一致 | 訊號互相矛盾 | Windows 跑 `check-windows-locale.ps1`；手機依 `DEVICES.md` 檢查地區／時區 |
 | 設定檔載入失敗 | YAML 語法 / BOM / 規則引用不存在的群組名 | 用 `verge-mihomo -t -f <檔案>` 驗證；確認檔案是 UTF-8 **無 BOM** |
 | 規則沒生效（全部 DIRECT） | 增強檔沒被套用 / 沒重新載入設定檔 | Verge → Profiles → 點設定檔卡片重新載入；用 `show-verge-map.ps1` 確認檔案對應 |
 | 改了 `ipv6` 卻沒生效 | **Verge 會用自己的設定覆蓋頂層鍵**（`ipv6`、`unified-delay`、`dns`、`tun`…） | 別在 Merge 裡改這些；用 Verge 的設定頁 |
@@ -223,6 +261,7 @@ clash-verge-ai-exit/
 ├── DEVICES.md                    ← iOS / Android / 瀏覽器 / Claude Code / Codex
 ├── AGENTS.md                     ← 給 AI agent 的入口指示
 ├── install.ps1                   ★ 安裝腳本（解析 uid、渲染範本、備份、驗證）
+├── check-windows-locale.ps1      ← Windows 地區／時區一致性檢查（-Apply 可修正）
 ├── show-verge-map.ps1            ← 印出 uid ↔ 角色對應
 ├── proxy-bench.ps1               ← 代理評測
 ├── .gitignore                    ← 排除 local-secrets.psd1 / mobile-clash.yaml / backup-*

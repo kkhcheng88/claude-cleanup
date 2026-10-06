@@ -138,4 +138,4 @@ powershell -ExecutionPolicy Bypass -File .\check-windows-locale.ps1 -Apply
 1. **不要**把 `AI-Exit` 切成 `DIRECT`、不要改成 `url-test`
 2. **不要**清目標網站 cookie、不要用無痕當日常
 3. VPN / Stash / CMFA **保持連線**（斷線時流量會走真實路徑）
-4. 同一組帳號**只在同一條線**上使用
+4. 同一組帳號**固定在同一條線**上使用（**多組帳號共用一條線沒問題** —— 見 `SETUP.md` 第 11.1 節）

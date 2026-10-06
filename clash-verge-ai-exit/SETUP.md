@@ -301,6 +301,8 @@ powershell -ExecutionPolicy Bypass -File .\verify-exit.ps1
 | 以為 `dns_config.yaml` 的 nameserver 在生效 | 生成的 `dns:` 只有 5 行（enable / ipv6 / enhanced-mode / fake-ip-range ×2），**沒有任何 nameserver** | 別對不存在的風險做決策：此版本 `dns_config.yaml` 形同未使用 |
 | 第一次連新出口出現 TLS 中斷（`SSL UNEXPECTED_EOF_WHILE_READING`） | 出口暖機中 | **重測 2–3 次再判斷**，不要立刻當成故障 |
 | 裝過 Tailscale / WireGuard 等 | exit node 或 subnet route 會接管路由、繞過 Clash | 事前確認已登出或未啟用 exit node（見 4.0） |
+| `Get-Process` 顯示 Verge 沒在執行，但其實在跑 | **受限的 shell 看不到其他程序**（實測踩過：因此改了 `verge.yaml` 卻完全沒生效） | 也檢查 `logs\latest.log` 的修改時間；`install.ps1` 現在會用日誌時間做第二個判斷。**改 `verge.yaml` 前務必確認 Verge 真的關閉，改完要重啟 GUI**（C2） |
+| 驗收腳本顯示 `no HTTP/3 via proxy = INFO` | **此 shell 沒有 HTTPS 出口**（HTTP 可用、HTTPS 回空） | `verify-exit.ps1` 的 IP／出口國家測試已改用 HTTP，所以仍可判定；HTTP/3 只能在有 HTTPS 的 shell 測 |
 | 設定檔載入失敗 | YAML 語法 / BOM / 規則引用不存在的群組名 | 用 `verge-mihomo -t -f <檔案>` 驗證；確認檔案是 UTF-8 **無 BOM** |
 | 規則沒生效（全部 DIRECT） | 增強檔沒被套用 / 沒重新載入設定檔 | Verge → Profiles → 點設定檔卡片重新載入；用 `show-verge-map.ps1` 確認檔案對應 |
 | 改了 `ipv6` 卻沒生效 | **Verge 會用自己的設定覆蓋頂層鍵**（`ipv6`、`unified-delay`、`dns`、`tun`…） | 別在 Merge 裡改這些；用 Verge 的設定頁 |

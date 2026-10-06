@@ -111,6 +111,19 @@ if ($running.Count -gt 0) {
   Write-Host ''
   Write-Host "WARNING: Clash Verge seems to be running ($((($running | Select-Object -ExpandProperty ProcessName) | Sort-Object -Unique) -join ', '))." -ForegroundColor Yellow
   Write-Host '         Changes may be overwritten. Close it completely (tray -> Exit) if possible.' -ForegroundColor Yellow
+} else {
+  # A restricted shell cannot always enumerate other processes, so "no process found"
+  # is not proof that the app is closed. The app log timestamp is a second signal.
+  $logFile = Join-Path $VergeDir 'logs\latest.log'
+  if (Test-Path $logFile) {
+    $age = (Get-Date) - (Get-Item $logFile).LastWriteTime
+    if ($age.TotalMinutes -lt 5) {
+      Write-Host ''
+      Write-Host ("WARNING: no Clash Verge process is visible, but its log was written {0:N0} minute(s) ago." -f $age.TotalMinutes) -ForegroundColor Yellow
+      Write-Host '         It is probably running (restricted shells cannot always list processes).' -ForegroundColor Yellow
+      Write-Host '         verge.yaml changes do NOT take effect until the GUI is restarted.' -ForegroundColor Yellow
+    }
+  }
 }
 
 # ------------------------------------------------------------- preflight ----

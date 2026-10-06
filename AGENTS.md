@@ -47,6 +47,12 @@ Non-negotiable rules for that module:
   home location, system locale, user formats and language list must not contradict
   the exit country. `-Apply` fixes mismatches (time zone and system locale need
   Administrator; system locale needs a reboot, language list needs a sign-out).
+- **Apply the package's defaults; do not make the user choose.** The default is
+  system proxy + proxy guard + `HTTPS_PROXY` + QUIC blocked in both places +
+  sniffer + a `select` exit group (see `SETUP.md` section 13 for the failure-mode
+  reasoning). Add TUN when the Clash Verge service is already available; when it
+  is not, do **not** install the service just for TUN — use the system proxy
+  instead. Explain trade-offs only if the user asks why.
 - The scope statement in `README.md` describes the **cleanup skill**; the Clash
   package is a network-configuration tool and carries its own prerequisites and
   boundaries (see `SETUP.md` section 11).

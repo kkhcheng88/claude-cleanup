@@ -45,7 +45,8 @@ param(
   [string]$NodeName,
   [string]$SecretsFile,
   [switch]$IncludeMainProfile,
-  [switch]$SkipLaunchers
+  [switch]$SkipLaunchers,
+  [switch]$SkipVergeSettings
 )
 
 $ErrorActionPreference = 'Stop'
@@ -198,6 +199,8 @@ $stamp  = Get-Date -Format 'yyyyMMdd-HHmmss'
 $bakDir = Join-Path $scriptDir "backup-$stamp"
 New-Item -ItemType Directory -Force -Path $bakDir | Out-Null
 Copy-Item $profilesYaml (Join-Path $bakDir 'profiles.yaml') -Force
+$vergeYaml = Join-Path $VergeDir 'verge.yaml'
+if (Test-Path $vergeYaml) { Copy-Item $vergeYaml (Join-Path $bakDir 'verge.yaml') -Force }
 foreach ($t in $targets) {
   if (Test-Path $t.Dst) { Copy-Item $t.Dst (Join-Path $bakDir (Split-Path -Leaf $t.Dst)) -Force }
 }
@@ -243,6 +246,45 @@ if (-not $SkipLaunchers) {
     }
   } else {
     Write-Host '  launchers skipped (no launchers folder or no %APPDATA%\npm)' -ForegroundColor Yellow
+  }
+}
+
+# --------------------------------------------------- verge.yaml defaults ----
+# The package's recommended defaults, so a new machine needs no decisions:
+#   system proxy ON -> browsers and WinINET apps fail loudly when the core is
+#                      down, instead of silently leaving from the real IP
+#   proxy guard ON  -> re-apply the system proxy if another program changes it
+# TUN is deliberately NOT touched here: it needs the Clash Verge service, which
+# may not be installed. Turn it on in the app when available (it adds coverage).
+if (-not $SkipVergeSettings) {
+  Step 'verge.yaml recommended defaults'
+  if (-not (Test-Path $vergeYaml)) {
+    Write-Host "  verge.yaml not found at $vergeYaml - skipped" -ForegroundColor Yellow
+  } else {
+    $vy = Get-Content $vergeYaml -Raw
+    $pairs = @(
+      @{ Key = 'enable_system_proxy'; Want = 'true' },
+      @{ Key = 'enable_proxy_guard';  Want = 'true' }
+    )
+    foreach ($pr in $pairs) {
+      $k = $pr.Key
+      $w = $pr.Want
+      $pat = '(?m)^{0}:\s*(\S+)\s*$' -f [regex]::Escape($k)
+      if ($vy -match $pat) {
+        $cur = $Matches[1]
+        if ($cur -eq $w) {
+          Write-Host ("  {0} already {1}" -f $k, $w)
+        } else {
+          $vy = [regex]::Replace($vy, $pat, ('{0}: {1}' -f $k, $w))
+          Write-Host ("  {0} : {1} -> {2}" -f $k, $cur, $w) -ForegroundColor Green
+        }
+      } else {
+        $vy = $vy.TrimEnd() + "`n" + ('{0}: {1}' -f $k, $w) + "`n"
+        Write-Host ("  {0} : (absent) -> {1}" -f $k, $w) -ForegroundColor Green
+      }
+    }
+    [System.IO.File]::WriteAllText($vergeYaml, $vy, $utf8NoBom)
+    Write-Host '  Verge must be restarted for these to take effect.'
   }
 }
 

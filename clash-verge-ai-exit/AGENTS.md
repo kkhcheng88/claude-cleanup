@@ -3,6 +3,16 @@
 這個資料夾是一套 **Clash Verge 設定包**：把指定服務的流量**固定導向一個專屬靜態代理出口**，
 並確保沒有旁路洩漏；其餘流量直連。
 
+## 預設組態（直接套用，**不要叫使用者選**）
+
+使用者不想在技術選項之間做選擇。請直接套用以下預設，然後回報結果：
+
+1. `install.ps1` 會自動設定 `enable_system_proxy: true` 與 `enable_proxy_guard: true`（這是 fail-closed 的關鍵）
+2. **TUN**：Clash Verge 的系統服務可用 → 在 App 內開啟（多一層覆蓋面）；**服務未安裝 → 不要為了 TUN 去安裝服務**，改用系統代理（對 AI 流量已足夠），並在回報中說明
+3. 瀏覽器 **QUIC 關閉**（與 mihomo 的 UDP 443 阻擋形成雙保險）
+4. Claude Code 的 `HTTPS_PROXY`（fail-closed）
+5. 只有使用者**主動問「為什麼」**時才解釋取捨（見 `SETUP.md` 第 13 節）；不要把「TUN 還是明確代理」當成問題丟回給使用者
+
 ## 當使用者要求「在這台電腦設定 Clash Verge / 固定出口」時
 
 1. **先完整讀 `SETUP.md`**（唯一權威手冊），再讀 `DEVICES.md`（手機／瀏覽器／CLI）。

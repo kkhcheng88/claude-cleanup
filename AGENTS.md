@@ -66,6 +66,14 @@ Non-negotiable rules for that module:
   and `logs\sidecar\sidecar_latest.log` stops updating. Verify by reloading the
   profile in the GUI and read the Connections page (or the mihomo info log line), not
   the sidecar log, which otherwise yields a false "nothing leaked" conclusion.
+- **Enterprise OneDrive stuck on "Signing in..." is a capture-layer problem, not a
+  routing problem.** Windows blocks AppContainer apps from loopback, so the WAM broker
+  (`Microsoft.AAD.BrokerPlugin`) cannot reach the local proxy at all; no `DOMAIN-*` or
+  group change can fix it. Run
+  [`clash-verge-ai-exit/fix-uwp-loopback.ps1`](clash-verge-ai-exit/fix-uwp-loopback.ps1)
+  `-Apply` from an elevated shell (it only touches installed packages and verifies the
+  result with `CheckNetIsolation LoopbackExempt -s` — a printed success message is not
+  proof, and `-n` must be passed quoted through cmd.exe).
 - The scope statement in `README.md` describes the **cleanup skill**; the Clash
   package is a network-configuration tool and carries its own prerequisites and
   boundaries (see `SETUP.md` section 11).

@@ -192,6 +192,36 @@ if ($cvs) {
   }
 }
 
+# (d) AppContainer loopback exemptions - required whenever the system proxy is on
+$vyPath = Join-Path $VergeDir 'verge.yaml'
+$sysProxyWanted = $false
+if (Test-Path $vyPath) {
+  $sysProxyWanted = ((Get-Content $vyPath -Raw) -match '(?m)^enable_system_proxy:\s*true\s*$')
+}
+try {
+  $lbRaw = (& cmd.exe /c 'CheckNetIsolation LoopbackExempt -s' 2>&1 | Out-String)
+  # Language independent: a non-zero exit code means the query failed (not elevated).
+  # Do not pattern-match the localized error text - PowerShell 5.1 reads a BOM-less
+  # UTF-8 script as ANSI, so non-ASCII literals would be mojibake.
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host '  loopback exemptions: cannot read without an elevated shell (only matters for' -ForegroundColor DarkGray
+    Write-Host '                       enterprise/edu OneDrive - see fix-uwp-loopback.ps1)' -ForegroundColor DarkGray
+  } else {
+    $lbPfns = @([regex]::Matches($lbRaw, '\b[A-Za-z0-9\.\-]+_[a-z0-9]{13}\b') | ForEach-Object { $_.Value.ToLower() } | Sort-Object -Unique)
+    $broker = @($lbPfns | Where-Object { $_ -like 'microsoft.aad.brokerplugin_*' })
+    if ($broker.Count -eq 0 -and $sysProxyWanted) {
+      Write-Host '  loopback exemptions: the WAM broker is NOT exempt' -ForegroundColor Yellow
+      Write-Host '    -> with the system proxy on, enterprise/edu OneDrive sign-in will hang' -ForegroundColor Yellow
+      Write-Host '       on "Signing in..." with no error (AppContainer cannot reach loopback).' -ForegroundColor Yellow
+      Write-Host '    -> fix: powershell -ExecutionPolicy Bypass -File .\fix-uwp-loopback.ps1 -Apply' -ForegroundColor Yellow
+    } else {
+      Write-Host ("  loopback exemptions: {0} package(s); WAM broker {1}" -f $lbPfns.Count, $(if ($broker.Count -gt 0) { 'exempt' } else { 'not exempt (only matters for enterprise OneDrive)' }))
+    }
+  }
+} catch {
+  Write-Host '  loopback exemptions: check unavailable' -ForegroundColor DarkGray
+}
+
 # ------------------------------------------------------------ parse profile --
 $yaml = Get-Content $profilesYaml -Raw
 $mCur = [regex]::Match($yaml, '(?m)^current:\s*(\S+)\s*$')

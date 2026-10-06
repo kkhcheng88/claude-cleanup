@@ -94,6 +94,8 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -InstallService
 
 服務安裝器位於 **`C:\Program Files\Clash Verge\resources\clash-verge-service-install.exe`** —— 在 `resources\` 子目錄，**不是**安裝根目錄（這個路徑很容易搞錯）。安裝後服務名為 `clash_verge_service`，狀態 `Running / Automatic`。
 
+（同一個提權視窗可以順便做：`check-windows-locale.ps1 -Apply`、以及有企業／學校 OneDrive 時的 `fix-uwp-loopback.ps1 -Apply` —— 見第 14.2 節。）
+
 ### 4.4 重啟 Verge GUI
 
 `verge.yaml` 的修改**只有重啟 GUI 才生效**。
@@ -303,6 +305,7 @@ powershell -ExecutionPolicy Bypass -File .\verify-exit.ps1
 | 裝過 Tailscale / WireGuard 等 | exit node 或 subnet route 會接管路由、繞過 Clash | 事前確認已登出或未啟用 exit node（見 4.0） |
 | `Get-Process` 顯示 Verge 沒在執行，但其實在跑 | **受限的 shell 看不到其他程序**（實測踩過：因此改了 `verge.yaml` 卻完全沒生效） | 也檢查 `logs\latest.log` 的修改時間；`install.ps1` 現在會用日誌時間做第二個判斷。**改 `verge.yaml` 前務必確認 Verge 真的關閉，改完要重啟 GUI**（C2） |
 | 驗收腳本顯示 `no HTTP/3 via proxy = INFO` | **此 shell 沒有 HTTPS 出口**（HTTP 可用、HTTPS 回空） | `verify-exit.ps1` 的 IP／出口國家測試已改用 HTTP，所以仍可判定；HTTP/3 只能在有 HTTPS 的 shell 測 |
+| **企業／學校 OneDrive 永遠卡在「正在登入」**（個人 OneDrive 正常；**關掉 Clash 就正常**） | **AppContainer loopback 隔離**：UWP 沙盒預設禁止連 `127.0.0.1`，而企業登入走的 WAM broker（`Microsoft.AAD.BrokerPlugin`）正是 AppContainer → 連不到本地代理 → 無聲卡住。**擷取層問題，加任何域名規則都無效** | 系統管理員跑 `fix-uwp-loopback.ps1 -Apply`，然後登出／重開。詳見第 14.2 節 |
 | 設定檔載入失敗 | YAML 語法 / BOM / 規則引用不存在的群組名 | 用 `verge-mihomo -t -f <檔案>` 驗證；確認檔案是 UTF-8 **無 BOM** |
 | 規則沒生效（全部 DIRECT） | 增強檔沒被套用 / 沒重新載入設定檔 | Verge → Profiles → 點設定檔卡片重新載入；用 `show-verge-map.ps1` 確認檔案對應 |
 | 改了 `ipv6` 卻沒生效 | **Verge 會用自己的設定覆蓋頂層鍵**（`ipv6`、`unified-delay`、`dns`、`tun`…） | 別在 Merge 裡改這些；用 Verge 的設定頁 |
@@ -393,6 +396,7 @@ clash-verge-ai-exit/
 ├── verify-exit.ps1               ★ 一鍵驗收（TUN 覆蓋、分流、出口國家、HTTP 版本、DNS、地區）
 ├── check-windows-locale.ps1      ← Windows 地區／時區一致性檢查（-Apply 可修正）
 ├── proxy-logger.py               ← 只記錄不轉發的代理：驗證某程式是否真的吃代理設定
+├── fix-uwp-loopback.ps1          ← AppContainer loopback 豁免（企業 OneDrive 卡登入的修法）
 ├── show-verge-map.ps1            ← 印出 uid ↔ 角色對應
 ├── proxy-bench.ps1               ← 代理評測
 ├── .gitignore                    ← 排除 local-secrets.psd1 / mobile-clash.yaml / backup-*
@@ -475,7 +479,32 @@ TUN 只決定「**誰被抓進來**」與「**掛掉時怎麼失敗**」；**規
 - **`enable_dns_settings` 只有在 `enable_tun_mode` 也開啟時才生效** —— Verge 只在 TUN 開啟時注入 `dns:` 區塊。單獨開 DNS 時生成的設定完全沒有 `dns:`，`:53` 也沒監聽，看起來像沒生效。
 - **`dns_config.yaml` 在多數情況下沒有被套用**：即使啟用，生成的 `dns:` 也只有 5 行（`enable` / `ipv6` / `enhanced-mode` / `fake-ip-range` / `fake-ip-range6`），**沒有任何 nameserver**，`dns_config.yaml` 裡的 DoH 供應商全部缺席。**不要對不存在的風險做決策。**
 
-### 14.2 憑證的實情
+### 14.2 AppContainer loopback 隔離（企業 OneDrive 卡在登入）
+
+**症狀**：企業／學校 OneDrive 永遠卡在「正在登入」、**沒有錯誤碼**；個人 OneDrive 正常；**關掉 Clash 就正常** —— 最後這點最容易讓人誤判成 IP／地區問題，但認證端點其實全部可達（HTTP 200）。
+
+**根因**：Windows 預設禁止 **AppContainer（UWP 沙盒）** 連線 loopback（`127.0.0.1`）。企業登入走 WAM broker `Microsoft.AAD.BrokerPlugin`，那是 AppContainer，必須連 `127.0.0.1:7897` 才能走代理 → 被沙盒拒絕 → 無聲卡住。個人 OneDrive 走不同路徑，所以不受影響。（決定性證據：該機器的豁免清單**原本是空的**。）
+
+**為什麼「加規則」永遠無效**：規則引擎只在**連上代理之後**才執行；AppContainer 根本連不上代理。`DOMAIN-*→DIRECT`、改導向群組、IPv4-only DNS 全部無效 —— **這是擷取層問題，不是路由層問題**。
+
+**修法**（需系統管理員）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\fix-uwp-loopback.ps1 -Apply
+```
+
+它會：列出目前豁免 → **只對實際已安裝**的套件加豁免（關鍵是 `Microsoft.AAD.BrokerPlugin`，其餘涵蓋 AccountsControl / CloudExperienceHost / OneDriveSync / Store / OfficeHub / XboxIdentityProvider / CredDialogHost / Win32WebViewHost）→ **重新讀取清單驗證**（不信任「成功」訊息）→ 完成後需**登出或重開機**再試登入。
+
+**兩個會讓人繞遠路的陷阱**
+
+1. `CheckNetIsolation` 必須**透過 cmd.exe 並帶引號的 `-n="..."`**；直接從 PowerShell 傳 `-n=$p` 會回「無效的參數」。分辨法：**正確語法在缺權限時回「拒絕存取」，錯誤語法回「無效的參數」**。
+2. **印「成功」不等於註冊成功**：語法錯誤時 9 個都印成功，實際只註冊 1 筆，顯示成 `AppContainer NOT FOUND` 且 **SID 全部相同**。一定要用 `-s` 驗證：名稱欄須為套件名、**每筆 SID 須不同**。腳本會自動做這個檢查並在發現時警告。
+
+**與預設組態的關係**：我們預設開啟**系統代理**，這正是觸發條件。若你有企業／學校 OneDrive，這個豁免就是必要的（可用 `-Delete` 還原）。
+
+**已排除的假設（不要在新機器重測）**：端點不可達 ❌／IPv6 問題 ❌／`MATCH,DIRECT` 導致走錯出口 ❌／`dns_config.yaml` 的 CN nameserver 洩漏 ❌（此版本產生的 `dns:` 區塊根本沒有 nameserver）／Conditional Access 地區限制 ❌（加豁免後，同一出口就能登入成功）。
+
+### 14.3 憑證的實情
 
 生成的 runtime config（`clash-verge.yaml`）**含明文代理密碼** —— 這是 mihomo 的必然，不要以為密碼只存在於 `local-secrets.psd1`。
 `.gitignore` 已排除 `local-secrets.psd1` 與 `mobile-clash.yaml`（可用 `git ls-files` 驗證）。

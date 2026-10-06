@@ -54,12 +54,17 @@
 | 用 `Stop-Process verge-mihomo` 驗證重啟 | 服務模式下會 `Access is denied`。要用 GUI 重新載入設定檔，否則你會以為重啟成功但核心沒換 |
 | 在服務模式下把 sidecar 日誌當成「沒有洩漏」的證據 | 該日誌在服務模式下停止更新 → 只會得到假陰性。改用 GUI「連線」頁或 mihomo 的 info 日誌行 |
 | 假設 `dns_config.yaml` 的 nameserver 正在生效 | 實測：生成的 `dns:` 區塊沒有任何 nameserver，`dns_config.yaml` 形同未使用。不要對不存在的風險做決策 |
+| **用域名規則修「企業 OneDrive 卡在登入」** | 那是**擷取層**問題（AppContainer loopback 隔離），規則引擎只在連上代理後才執行 → 任何 `DOMAIN-*` 調整都無效。正解是 `fix-uwp-loopback.ps1 -Apply`（見 `SETUP.md` 第 14.2 節） |
+| 用 `CheckNetIsolation ... -n=$var`（未加引號）就相信結果 | 必須透過 cmd.exe 帶 `-n="..."`；而且**印「成功」不等於註冊成功** —— 要用 `-s` 驗證「每筆 SID 不同」 |
 
 ## 修改設定後的必要動作
 
 1. 用 `verge-mihomo -t -f <檔案>` 驗證（沒有錯誤才算通過）
 2. 確認寫出的檔案是 **UTF-8 無 BOM**（有 BOM 會讓 mihomo YAML 解析失敗）
-3. 提醒使用者：**在 Clash Verge 重新載入設定檔**，並在「連線」頁確認目標網域的
+3. **`.ps1` / `.cmd` 必須 ASCII-only** —— PowerShell 5.1 會把「無 BOM 的 UTF-8 腳本」當 ANSI 讀取，
+   任何中文字面值都會變亂碼（實測踩過：正則裡的「拒絕存取」變成 `?摮?`，直接拋 `{x,y}` 剖析錯誤）。
+   需要判斷本地化訊息時，**改用 exit code 或結構化特徵**，不要比對翻譯字串。
+4. 提醒使用者：**在 Clash Verge 重新載入設定檔**，並在「連線」頁確認目標網域的
    鏈路是 `AI-Exit / <節點名>`（不是 `DIRECT`）
 
 ## 檔案角色速查
@@ -73,6 +78,7 @@
 | `check-windows-locale.ps1` | Windows 地區／時區一致性檢查（`-Apply` 可修正；**永不碰語言清單**） |
 | `verify-exit.ps1` | 一鍵驗收：TUN 覆蓋、分流、出口國家、HTTP 版本、DNS、地區 |
 | `proxy-logger.py` | 只記錄不轉發的代理 —— 驗證某程式是否真的吃代理設定（不開 TUN 時必備） |
+| `fix-uwp-loopback.ps1` | AppContainer loopback 豁免（企業 OneDrive 卡在登入的修法；`-Apply` / `-Delete`） |
 | `proxy-bench.ps1` | 代理評測（TTFB / loc / colo / ASN） |
 | `configs/` | 所有範本（`__PROXY_*__` 佔位符） |
 | `launchers/` | `codex-p.cmd` / `claude-p.cmd`（fail-closed 啟動器） |

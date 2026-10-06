@@ -1,0 +1,6 @@
+# Keep local secrets and generated files out of the repo.
+local-secrets.psd1
+mobile-clash.yaml
+backup-*/
+miho/
+*.local.yaml

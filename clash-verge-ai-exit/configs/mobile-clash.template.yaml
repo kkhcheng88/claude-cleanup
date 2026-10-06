@@ -1,0 +1,103 @@
+# ============================================================
+#  Mobile config template - self-contained (no enhancement files)
+#
+#  Used by:
+#    iOS     -> Stash (mihomo core; import this YAML as-is)
+#    Android -> Clash Meta for Android / CMFA (import this YAML as-is)
+#
+#  install.ps1 fills the __...__ placeholders and writes
+#  mobile-clash.yaml (which you then transfer to the device).
+#
+#  Same design as the desktop profile:
+#   * AI-Exit is type select -> the exit IP never changes by itself
+#   * QUIC (UDP 443) blocked -> otherwise apps leak through the real IP
+#   * sniffer with parse-pure-ip -> defeats app/system DoH bypass
+#   * only account-related domains are proxied, everything else direct
+# ============================================================
+
+mixed-port: 7890
+allow-lan: false
+mode: rule
+log-level: info
+ipv6: true
+
+dns:
+  enable: true
+  ipv6: true
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  fake-ip-filter:
+    - "*.lan"
+    - "*.local"
+    - "+.stun.*.*"
+  nameserver:
+    - https://1.1.1.1/dns-query
+    - https://8.8.8.8/dns-query
+    - 1.1.1.1
+    - 8.8.8.8
+
+sniffer:
+  enable: true
+  force-dns-mapping: true
+  parse-pure-ip: true
+  sniff:
+    HTTP:
+      ports: [80, 8080-8880]
+      override-destination: true
+    TLS:
+      ports: [443, 8443]
+    QUIC:
+      ports: [443, 8443]
+
+proxies:
+  - name: "__NODE_NAME__"
+    type: http
+    server: __PROXY_HOST__
+    port: __PROXY_PORT__
+    username: __PROXY_USER__
+    password: __PROXY_PASSWORD__
+    tls: false
+
+proxy-groups:
+  - name: "AI-Exit"
+    type: select          # manual selection only - never url-test here
+    proxies:
+      - "__NODE_NAME__"
+      - DIRECT
+
+rules:
+  - AND,((NETWORK,udp),(DST-PORT,443)),REJECT
+
+  # Claude / Anthropic
+  - DOMAIN-KEYWORD,claude,AI-Exit
+  - DOMAIN-SUFFIX,claude.ai,AI-Exit
+  - DOMAIN-SUFFIX,claude.com,AI-Exit
+  - DOMAIN-SUFFIX,anthropic.com,AI-Exit
+  - DOMAIN-SUFFIX,claudeusercontent.com,AI-Exit
+
+  # OpenAI / ChatGPT
+  - DOMAIN-KEYWORD,openai,AI-Exit
+  - DOMAIN-KEYWORD,chatgpt,AI-Exit
+  - DOMAIN-SUFFIX,chatgpt.com,AI-Exit
+  - DOMAIN-SUFFIX,openai.com,AI-Exit
+  - DOMAIN-SUFFIX,oaistatic.com,AI-Exit
+  - DOMAIN-SUFFIX,oaiusercontent.com,AI-Exit
+  # - DOMAIN-SUFFIX,livekit.cloud,AI-Exit      # ChatGPT voice mode
+
+  # Front-end helpers
+  - DOMAIN-SUFFIX,statsig.com,AI-Exit
+  - DOMAIN-SUFFIX,statsigapi.net,AI-Exit
+  - DOMAIN-SUFFIX,featuregates.org,AI-Exit
+
+  # Surrounding domains (consistent source IP)
+  - DOMAIN-SUFFIX,challenges.cloudflare.com,AI-Exit
+  - DOMAIN-SUFFIX,cloudflarechallenge.com,AI-Exit
+  - DOMAIN-SUFFIX,cloudflareinsights.com,AI-Exit
+  - DOMAIN-SUFFIX,hcaptcha.com,AI-Exit
+  - DOMAIN-SUFFIX,stripe.com,AI-Exit
+  - DOMAIN-SUFFIX,stripe.network,AI-Exit
+
+  # Test helper
+  - DOMAIN-KEYWORD,ipinfo,AI-Exit
+
+  - MATCH,DIRECT

@@ -1,0 +1,57 @@
+# ============================================================
+#  Rules enhancement template  (Clash Verge Rev -> "Rules" tab)
+#
+#  `prepend` items are inserted BEFORE the rules of the main profile
+#  (which ends with MATCH,DIRECT), so these win.
+#  First match wins - keep the QUIC rule first.
+# ============================================================
+
+prepend:
+  # ---------- 0. Block QUIC / HTTP3 (UDP 443) ----------
+  # WHY: an HTTP proxy cannot carry UDP, and QUIC cannot be matched by
+  # domain rules, so a browser would connect to claude.ai DIRECTLY over
+  # HTTP/3 using the real IP. That is exactly what produced the
+  # "Claude isn't available in your region" page (Cloudflare saw an HK IP).
+  # REJECT forces the browser back to TCP, where the domain rules apply.
+  # Remove this line only if some app genuinely needs QUIC.
+  - AND,((NETWORK,udp),(DST-PORT,443)),REJECT
+
+  # ---------- 1. By process name (bonus, Windows TUN only) ----------
+  # Catches any domain used by these apps that is not listed below.
+  # On Windows TUN process lookup is best-effort, so this is a safety net,
+  # NOT a replacement for the domain rules.
+  - PROCESS-NAME-REGEX,(?i).*claude.*,AI-Exit
+  - PROCESS-NAME-REGEX,(?i).*chatgpt.*,AI-Exit
+
+  # ---------- 2. Claude / Anthropic ----------
+  - DOMAIN-KEYWORD,claude,AI-Exit
+  - DOMAIN-SUFFIX,claude.ai,AI-Exit
+  - DOMAIN-SUFFIX,claude.com,AI-Exit
+  - DOMAIN-SUFFIX,anthropic.com,AI-Exit                     # api / console / statsig.anthropic.com
+  - DOMAIN-SUFFIX,claudeusercontent.com,AI-Exit             # Artifacts iframe
+
+  # ---------- 3. OpenAI / ChatGPT ----------
+  - DOMAIN-KEYWORD,openai,AI-Exit
+  - DOMAIN-KEYWORD,chatgpt,AI-Exit
+  - DOMAIN-SUFFIX,chatgpt.com,AI-Exit
+  - DOMAIN-SUFFIX,openai.com,AI-Exit                        # api / auth / platform
+  - DOMAIN-SUFFIX,oaistatic.com,AI-Exit                     # ChatGPT static CDN
+  - DOMAIN-SUFFIX,oaiusercontent.com,AI-Exit                # file / image downloads
+  # ChatGPT voice mode uses WebRTC (livekit) - enable if needed:
+  # - DOMAIN-SUFFIX,livekit.cloud,AI-Exit
+
+  # ---------- 4. Front-end helpers (login / feature flags) ----------
+  - DOMAIN-SUFFIX,statsig.com,AI-Exit
+  - DOMAIN-SUFFIX,statsigapi.net,AI-Exit
+  - DOMAIN-SUFFIX,featuregates.org,AI-Exit
+
+  # ---------- 5. Surrounding domains - keep the source IP consistent ----------
+  - DOMAIN-SUFFIX,challenges.cloudflare.com,AI-Exit         # Cloudflare Turnstile / challenge script
+  - DOMAIN-SUFFIX,cloudflarechallenge.com,AI-Exit
+  - DOMAIN-SUFFIX,cloudflareinsights.com,AI-Exit
+  - DOMAIN-SUFFIX,hcaptcha.com,AI-Exit
+  - DOMAIN-SUFFIX,stripe.com,AI-Exit                        # subscription checkout
+  - DOMAIN-SUFFIX,stripe.network,AI-Exit                    # Stripe risk / 3DS
+
+append: []
+delete: []

@@ -1,0 +1,31 @@
+# ============================================================
+#  Merge enhancement template  (Clash Verge Rev -> "Merge" tab)
+#
+#  Only the sniffer block. Nothing else is needed here.
+#
+#  WHY THE SNIFFER MATTERS
+#    Browsers and apps may use their own encrypted DNS (DoH) and then
+#    connect straight to a resolved IP. Without the sniffer, mihomo only
+#    sees an IP address, the domain rules never match, and the traffic
+#    falls through to MATCH,DIRECT - silently leaving through your real
+#    (unsupported-region) IP.
+#    parse-pure-ip = true makes the sniffer read the TLS SNI / HTTP Host
+#    even when the destination is a bare IP, so the rules still match.
+#
+#  NOTE: Verge overrides some top-level keys with its own settings
+#  (e.g. ipv6, unified-delay, dns, tun, external-controller). Do not
+#  fight it here - see SETUP.md.
+# ============================================================
+
+sniffer:
+  enable: true
+  force-dns-mapping: true
+  parse-pure-ip: true
+  sniff:
+    HTTP:
+      ports: [80, 8080-8880]
+      override-destination: true
+    TLS:
+      ports: [443, 8443]
+    QUIC:
+      ports: [443, 8443]

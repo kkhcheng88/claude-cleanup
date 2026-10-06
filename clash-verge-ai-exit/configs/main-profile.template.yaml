@@ -1,0 +1,48 @@
+# ============================================================
+#  Main profile template  (Clash Verge Rev, local profile)
+#
+#  install.ps1 fills the __...__ placeholders and writes this file
+#  into the CURRENT Verge profile file, so DO NOT copy it by hand.
+#
+#  Design rules (do not change without reading SETUP.md):
+#   * AI-Exit MUST be type select  -> a manual, never-changing exit IP.
+#     url-test / load-balance would silently change the exit IP and
+#     break the "one account = one IP" rule.
+#   * Only account-related traffic goes through the proxy; everything
+#     else is MATCH,DIRECT.
+#   * The AI rules themselves live in the Rules enhancement file
+#     (enh-rules.ai-exit.yaml) so this profile stays small.
+# ============================================================
+
+mixed-port: 7897
+allow-lan: false
+mode: rule
+log-level: info
+
+proxies:
+  # Provider: Proxy-Seller ISP proxy (dedicated IP, static for the lease term).
+  # Replace the placeholders via install.ps1.
+  - name: "__NODE_NAME__"
+    type: http
+    server: __PROXY_HOST__
+    port: __PROXY_PORT__
+    username: __PROXY_USER__
+    password: __PROXY_PASSWORD__
+    tls: false
+
+proxy-groups:
+  - name: "AI-Exit"
+    type: select          # manual selection only - never url-test here
+    proxies:
+      - "__NODE_NAME__"
+      - DIRECT            # keep DIRECT for temporary A/B comparison
+
+rules:
+  # Let the ipinfo keyword follow the AI line so you can confirm the
+  # current exit IP with:  curl -x http://127.0.0.1:7897 https://ipinfo.io/ip
+  - DOMAIN-KEYWORD,ipinfo,AI-Exit
+
+  # Everything else: direct (no proxy cost, lowest latency).
+  # The Claude / OpenAI / Cloudflare-challenge / Stripe rules are injected
+  # by the Rules enhancement file and match BEFORE this line.
+  - MATCH,DIRECT

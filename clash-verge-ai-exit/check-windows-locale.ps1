@@ -24,8 +24,10 @@ USAGE
   powershell -ExecutionPolicy Bypass -File .\check-windows-locale.ps1 -Apply
 
 NOTES
-  * Time zone / system locale changes are machine-wide and need Administrator rights;
-    -Apply reports clearly if it could not change something.
+  * Time zone and system locale changes are machine-wide. Depending on the Windows
+    build and policy they may require Administrator rights - on some Windows 11
+    machines a standard user can change the time zone. -Apply reports clearly when
+    a change fails and suggests re-running elevated.
   * System locale changes take effect after a reboot; language list changes after a
     sign-out. The script tells you what still needs a restart.
   * Everything here is reversible in the Windows settings UI.
@@ -175,14 +177,25 @@ if ($cul -ne $Locale) {
 }
 
 if (-not $hasLocale) {
+  # NOTE: @(Get-WinUserLanguageList) returns a FIXED-SIZE object[] that wraps the list
+  # as a single element, so calling .Add() on it always throws
+  # "collection is of a fixed size". Build a mutable ArrayList instead, keep the
+  # existing order (the first entry is the display language) and append the new
+  # locale at the end.
   try {
-    $newList = @((Get-WinUserLanguageList))
-    $newList.Add($Locale) | Out-Null
-    Set-WinUserLanguageList -LanguageList $newList -Force
+    $flat = New-Object System.Collections.ArrayList
+    foreach ($x in (Get-WinUserLanguageList)) { [void]$flat.Add($x) }
+    foreach ($x in (New-WinUserLanguageList $Locale)) { [void]$flat.Add($x) }
+    Set-WinUserLanguageList -LanguageList $flat.ToArray() -Force
     $needsSignOut = $true
-    Write-Host ("  language list -> added {0} (takes effect after sign-out)" -f $Locale) -ForegroundColor Green
+    Write-Host ("  language list -> appended {0} (takes effect after sign-out)" -f $Locale) -ForegroundColor Green
+    Write-Host '                   NOTE: Windows may silently ignore this call. Re-run the check' -ForegroundColor DarkGray
+    Write-Host '                   to confirm; if it still reports MISMATCH, add the language' -ForegroundColor DarkGray
+    Write-Host '                   manually in Settings > Time & Language > Language & region.' -ForegroundColor DarkGray
   } catch {
     Write-Host ("  language list -> FAILED: {0}" -f $_.Exception.Message) -ForegroundColor Red
+    Write-Host '                   Fallback: add the language manually in Settings > Time &' -ForegroundColor DarkGray
+    Write-Host '                   Language > Language & region.' -ForegroundColor DarkGray
   }
 }
 

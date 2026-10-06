@@ -12,6 +12,27 @@ Windows too.
 
 繁體中文說明 → [README.zh-TW.md](README.zh-TW.md)
 
+## Also in this repo: clash-verge-ai-exit
+
+[`clash-verge-ai-exit/`](clash-verge-ai-exit/) is a separate, self-contained
+package for **Clash Verge Rev**. It pins selected service traffic to one
+dedicated, static proxy exit and closes the usual bypass paths (QUIC/HTTP3,
+system DoH, IPv6), while everything else stays direct.
+
+It is not part of the cleanup skill and has its own entry points:
+
+- [`clash-verge-ai-exit/SETUP.md`](clash-verge-ai-exit/SETUP.md) — the setup manual (authoritative)
+- [`clash-verge-ai-exit/AGENTS.md`](clash-verge-ai-exit/AGENTS.md) — instructions for agents
+- [`clash-verge-ai-exit/install.ps1`](clash-verge-ai-exit/install.ps1) — automated installer
+  (resolves Clash Verge's random uid files, renders the templates, backs up, validates)
+
+Proxy credentials are never committed: the templates use `__PROXY_*__`
+placeholders and the installer asks for the values at run time.
+
+The scope statement near the end of this file describes the **cleanup skill**.
+The Clash package is a network-configuration tool with its own prerequisites and
+boundaries — see `SETUP.md` section 11.
+
 ## The three places leftovers hide
 
 When a machine is retired or replaced, three locations are usually missed:

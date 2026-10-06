@@ -10,6 +10,24 @@
 
 English → [README.md](README.md)
 
+## 本 repo 的另一個模組：clash-verge-ai-exit
+
+[`clash-verge-ai-exit/`](clash-verge-ai-exit/) 是一套**獨立**的 **Clash Verge Rev** 設定包：
+把指定服務的流量**固定導向一個專屬靜態代理出口**，並關閉常見的旁路
+（QUIC/HTTP3、系統 DoH、IPv6），其餘流量一律直連。
+
+它不屬於清理 skill，有自己的入口：
+
+- [`clash-verge-ai-exit/SETUP.md`](clash-verge-ai-exit/SETUP.md) —— 設定手冊（權威）
+- [`clash-verge-ai-exit/AGENTS.md`](clash-verge-ai-exit/AGENTS.md) —— 給 agent 的指示
+- [`clash-verge-ai-exit/install.ps1`](clash-verge-ai-exit/install.ps1) —— 自動安裝腳本
+  （自動解析 Clash Verge 的隨機 uid 檔名、渲染範本、備份、驗證）
+
+代理憑證永不提交：範本使用 `__PROXY_*__` 佔位符，安裝時由使用者輸入。
+
+本文件下方的「適用界線」描述的是**清理 skill**；Clash 設定包是網路設定工具，
+有它自己的前提與界線 —— 見 `SETUP.md` 第 11 節。
+
 ## 殘留最常漏掉的三個地方
 
 汰換或退役機器時，通常會漏掉這三處：

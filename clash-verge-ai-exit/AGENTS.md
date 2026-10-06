@@ -27,10 +27,18 @@
    powershell -ExecutionPolicy Bypass -File .\install.ps1 -IncludeMainProfile
    ```
    代理密碼由使用者輸入（或用 `-SecretsFile`）；**不要**把密碼寫進任何檔案或對話。
-5. 依 `SETUP.md` 第 6～7 節完成：關閉瀏覽器 QUIC、Claude Code 的 `env` 區塊、
-   **Windows 地區／時區一致性檢查**（`check-windows-locale.ps1`，需回報
-   `all settings are consistent`）、三關驗證。
-6. 回報結果時附上三關的實際輸出（IP / `loc` / HTTP code）。
+5. 依 `SETUP.md` 第 4.3～4.5 與第 6～7 節完成：
+   - **服務與 TUN 只在需要覆蓋未知程式時才做**：`install.ps1 -InstallService`（**要提權**，
+     安裝器在 `C:\Program Files\Clash Verge\resources\`）；`enable_tun_mode` 與
+     `enable_dns_settings` **必須一起開**，然後重啟 GUI
+   - 關閉瀏覽器 QUIC；Claude Code 的 `env` 區塊
+   - 地區一致性：`check-windows-locale.ps1`（語言清單僅供參考，**絕對不要**用程式改它）
+   - **一鍵驗收：`verify-exit.ps1` 必須以 `RESULT: all automated checks passed.` 結束**
+6. **瀏覽器必須單獨驗證**（curl 不能代替）：`claude.ai/cdn-cgi/trace` 的 `ip=` 要是代理 IP。
+7. 回報時附上原始輸出：`verify-exit.ps1` 的整張表、瀏覽器 trace 的 `ip=` 與 `loc=`、
+   以及「連線」頁（或 mihomo 日誌行）中 `claude.ai` 的鏈路。
+8. 開 TUN／服務之後：非提權無法停止核心、sidecar 日誌會停止更新（見 `SETUP.md` 第 14 節）——
+   不要用「殺掉核心再重啟」驗證，也不要因為日誌乾淨就判定沒有洩漏。
 
 ## 不要做的事
 
@@ -42,6 +50,10 @@
 | 建議指紋瀏覽器 | 單一帳號不需要；額外偽裝會製造不一致訊號 |
 | 建議「用多個帳號**輪替**以規避用量上限」 | 這通常是條款明文禁止的行為，且付款工具／電話／裝置會讓帳號被關聯；應引導至官方更高方案／企業合約／按量計費 API。⚠️ 注意區分：**「有多個帳號」本身不是問題**（家庭、公司、個人＋工作都很常見，共用一條線也正常），要指出的問題是「輪替以規避上限」這個行為 —— 詳見 `SETUP.md` 第 11.1 節 |
 | 用猜測取代實測 | 所有決策以 `proxy-bench.ps1` 的實測數據為準（`loc` / `colo` / TTFB / 抖動／是否觸發驗證） |
+| **用程式改動使用者的語言清單**（`Set-WinUserLanguageList` / `New-WinUserLanguageList`） | 兩重風險：Windows 可能**靜默拒絕**（回報成功、registry 不變）；而且重建清單會**刪掉既有輸入法**（實測：使用者的倉頡 profile 被刪）。要加語言請使用者自己在設定介面加 |
+| 用 `Stop-Process verge-mihomo` 驗證重啟 | 服務模式下會 `Access is denied`。要用 GUI 重新載入設定檔，否則你會以為重啟成功但核心沒換 |
+| 在服務模式下把 sidecar 日誌當成「沒有洩漏」的證據 | 該日誌在服務模式下停止更新 → 只會得到假陰性。改用 GUI「連線」頁或 mihomo 的 info 日誌行 |
+| 假設 `dns_config.yaml` 的 nameserver 正在生效 | 實測：生成的 `dns:` 區塊沒有任何 nameserver，`dns_config.yaml` 形同未使用。不要對不存在的風險做決策 |
 
 ## 修改設定後的必要動作
 
@@ -58,7 +70,9 @@
 | `DEVICES.md` | iOS / Android / 瀏覽器 / Claude Code / Codex |
 | `install.ps1` | 自動安裝（解析 Verge 隨機 uid、渲染範本、備份、驗證） |
 | `show-verge-map.ps1` | 印出 uid ↔ 角色對應（排錯） |
-| `check-windows-locale.ps1` | Windows 地區／時區一致性檢查（`-Apply` 可修正） |
+| `check-windows-locale.ps1` | Windows 地區／時區一致性檢查（`-Apply` 可修正；**永不碰語言清單**） |
+| `verify-exit.ps1` | 一鍵驗收：TUN 覆蓋、分流、出口國家、HTTP 版本、DNS、地區 |
+| `proxy-logger.py` | 只記錄不轉發的代理 —— 驗證某程式是否真的吃代理設定（不開 TUN 時必備） |
 | `proxy-bench.ps1` | 代理評測（TTFB / loc / colo / ASN） |
 | `configs/` | 所有範本（`__PROXY_*__` 佔位符） |
 | `launchers/` | `codex-p.cmd` / `claude-p.cmd`（fail-closed 啟動器） |

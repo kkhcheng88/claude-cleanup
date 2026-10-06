@@ -43,16 +43,29 @@ Non-negotiable rules for that module:
   to compare latency, `loc`, `colo` and whether a challenge is triggered.
 - **Keep the device agreeing with the exit country.** Run
   [`clash-verge-ai-exit/check-windows-locale.ps1`](clash-verge-ai-exit/check-windows-locale.ps1)
-  as part of setup and require `RESULT: all settings are consistent.` — time zone,
-  home location, system locale, user formats and language list must not contradict
-  the exit country. `-Apply` fixes mismatches (time zone and system locale need
-  Administrator; system locale needs a reboot, language list needs a sign-out).
+  as part of setup and require `RESULT: all settings are consistent.` — the verdict is
+  time zone, home location, system locale and user formats. The **language list is
+  informational only** and never blocks the verdict: Windows can refuse the change
+  silently, and writing the list programmatically destroys existing IMEs, so the
+  script never touches it. Time zone and system locale may need Administrator; the
+  system locale needs a reboot.
 - **Apply the package's defaults; do not make the user choose.** The default is
   system proxy + proxy guard + `HTTPS_PROXY` + QUIC blocked in both places +
   sniffer + a `select` exit group (see `SETUP.md` section 13 for the failure-mode
   reasoning). Add TUN when the Clash Verge service is already available; when it
   is not, do **not** install the service just for TUN — use the system proxy
   instead. Explain trade-offs only if the user asks why.
+- **Never rewrite the user's language list** (`Set-WinUserLanguageList` /
+  `New-WinUserLanguageList`). Windows can report success while changing nothing, and
+  rebuilding the list overwrites the existing input methods — a real Cangjie IME
+  profile was destroyed this way. `check-windows-locale.ps1` reports the language
+  list but never writes it; the script's `-Apply` skips it deliberately. Add languages
+  through the Settings UI instead.
+- **In Clash Verge service mode** (required for TUN) a non-elevated process can no
+  longer stop the core — `Stop-Process verge-mihomo` fails with `Access is denied` —
+  and `logs\sidecar\sidecar_latest.log` stops updating. Verify by reloading the
+  profile in the GUI and read the Connections page (or the mihomo info log line), not
+  the sidecar log, which otherwise yields a false "nothing leaked" conclusion.
 - The scope statement in `README.md` describes the **cleanup skill**; the Clash
   package is a network-configuration tool and carries its own prerequisites and
   boundaries (see `SETUP.md` section 11).

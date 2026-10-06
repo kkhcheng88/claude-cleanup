@@ -46,7 +46,8 @@ param(
   [string]$SecretsFile,
   [switch]$IncludeMainProfile,
   [switch]$SkipLaunchers,
-  [switch]$SkipVergeSettings
+  [switch]$SkipVergeSettings,
+  [switch]$InstallService
 )
 
 $ErrorActionPreference = 'Stop'
@@ -110,6 +111,72 @@ if ($running.Count -gt 0) {
   Write-Host ''
   Write-Host "WARNING: Clash Verge seems to be running ($((($running | Select-Object -ExpandProperty ProcessName) | Sort-Object -Unique) -join ', '))." -ForegroundColor Yellow
   Write-Host '         Changes may be overwritten. Close it completely (tray -> Exit) if possible.' -ForegroundColor Yellow
+}
+
+# ------------------------------------------------------------- preflight ----
+# Things that can silently invalidate this whole setup if they are missed.
+$isAdmin = $false
+try {
+  $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+} catch { }
+
+Step 'preflight'
+Write-Host ("  running elevated: {0}" -f $isAdmin)
+
+# (a) other VPN / tunnel software owns routing independently of Clash
+$vpnSvc = @()
+try {
+  $vpnSvc = @(Get-Service -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'Tailscale|WireGuard|OpenVPN|SoftEther|ZeroTier|ProtonVPN|NordVPN' })
+} catch { }
+if ($vpnSvc.Count -gt 0) {
+  foreach ($s in $vpnSvc) { Write-Host ("  other VPN service : {0} ({1})" -f $s.Name, $s.Status) -ForegroundColor Yellow }
+  Write-Host '    -> an active exit node or subnet route would take over routing and bypass' -ForegroundColor Yellow
+  Write-Host '       Clash entirely. Confirm it is logged out / has no exit node enabled.' -ForegroundColor Yellow
+} else {
+  Write-Host '  other VPN services: none detected'
+}
+
+# (b) adapters and who owns the default route (best effort; shells may deny this)
+try {
+  $ad = @(Get-NetAdapter -ErrorAction Stop | Where-Object { $_.Status -eq 'Up' })
+  Write-Host ('  up adapters       : ' + (($ad | ForEach-Object { $_.Name }) -join ', '))
+  $def = @(Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction Stop | Sort-Object RouteMetric)
+  if ($def.Count -gt 0) {
+    Write-Host ('  default route     : {0} (metric {1})' -f $def[0].InterfaceAlias, $def[0].RouteMetric)
+  }
+} catch {
+  Write-Host '  adapters/routes   : unavailable in this shell (not fatal)' -ForegroundColor DarkGray
+}
+
+# (c) Clash Verge service - required for TUN mode
+$svcInstaller = $null
+foreach ($cand in @(
+    (Join-Path $env:ProgramFiles 'Clash Verge\resources\clash-verge-service-install.exe'),
+    (Join-Path ${env:ProgramFiles(x86)} 'Clash Verge\resources\clash-verge-service-install.exe')
+  )) {
+  if ($cand -and (Test-Path $cand)) { $svcInstaller = $cand; break }
+}
+$cvs = Get-Service -Name clash_verge_service -ErrorAction SilentlyContinue
+if ($cvs) {
+  Write-Host ("  clash_verge_service: {0} / {1}" -f $cvs.Status, $cvs.StartType) -ForegroundColor Green
+} else {
+  Write-Host '  clash_verge_service: NOT INSTALLED (TUN mode will not work without it)' -ForegroundColor Yellow
+  if ($svcInstaller) {
+    Write-Host ("    installer        : {0}" -f $svcInstaller) -ForegroundColor Yellow
+    Write-Host '    (note: it lives in resources\, not in the install root)' -ForegroundColor DarkGray
+    if ($InstallService) {
+      if (-not $isAdmin) {
+        Write-Host '    -InstallService needs an elevated shell - skipped' -ForegroundColor Red
+      } else {
+        Write-Host '    installing the service...' -ForegroundColor Cyan
+        & $svcInstaller | Out-Host
+      }
+    } else {
+      Write-Host '    run this script again with -InstallService from an elevated shell to install it' -ForegroundColor Yellow
+    }
+  } else {
+    Write-Host '    installer not found under Program Files\Clash Verge\resources\' -ForegroundColor DarkGray
+  }
 }
 
 # ------------------------------------------------------------ parse profile --
@@ -311,31 +378,46 @@ Step 'DONE - do these steps in Clash Verge'
 Write-Host @'
   1. Start Clash Verge -> Profiles -> click the profile card to reload it.
      The log should NOT contain "initial rule provider error" or YAML errors.
+     (verge.yaml edits only take effect after the GUI restarts.)
 
-  2. Browser: disable QUIC or HTTP/3 will bypass the domain rules.
+  2. Browser: disable QUIC or HTTP/3 can bypass the domain rules.
        Edge   -> edge://flags/#enable-quic   -> Disabled
        Chrome -> chrome://flags/#enable-quic -> Disabled
      Then restart the browser completely.
 
-  3. Verify (PowerShell / cmd):
-       curl.exe -x http://127.0.0.1:7897 -s -w "`n" https://ipinfo.io/ip
-            -> must print the proxy IP
-       curl.exe -x http://127.0.0.1:7897 -s https://claude.ai/cdn-cgi/trace
-            -> must contain loc=<supported country>
-       curl.exe -x http://127.0.0.1:7897 -s -o NUL -w "%{http_code}`n" https://claude.ai/
-            -> 200/302/403 is fine (403 = Cloudflare challenge for curl)
+  3. Acceptance - one command that produces the evidence:
+       powershell -ExecutionPolicy Bypass -File .\verify-exit.ps1
+     It must end with "RESULT: all automated checks passed."
 
-  4. Clash Verge -> Connections: claude.ai must show rule DomainSuffix(...) and
-     chain AI-Exit / <node name>. If it shows DIRECT, something is leaking.
+  4. curl does NOT prove the browser. Check the browser directly:
+       open https://claude.ai/cdn-cgi/trace -> ip= must be the proxy IP, loc= the target country
+     Clash Verge -> Connections: claude.ai must show the exit group, never DIRECT.
+     In service mode the authoritative proof is the mihomo log line:
+       [TCP] 127.0.0.1:58593(msedge.exe) --> claude.ai:443
+             match DomainKeyword(claude) using AI-Exit[<node>]
 
-  5. Phones/tablets: transfer mobile-clash.yaml to the device and follow DEVICES.md.
+  5. Windows regional consistency:
+       powershell -ExecutionPolicy Bypass -File .\check-windows-locale.ps1
+     Must end with "RESULT: all settings are consistent."
+     The language list is informational only - Windows can silently refuse it, and the
+     script never rewrites it (rewriting can delete existing IMEs).
 
   6. Claude Code: add the proxy env block to %USERPROFILE%\.claude\settings.json
      (see DEVICES.md).
 
-  7. Windows regional consistency - the device must agree with the exit country:
-       powershell -ExecutionPolicy Bypass -File .\check-windows-locale.ps1
-     It must end with "RESULT: all settings are consistent."
-     Fix mismatches with -Apply (time zone and system locale need Administrator;
-     system locale needs a reboot, language list needs a sign-out).
+  7. Phones/tablets: transfer mobile-clash.yaml to the device and follow DEVICES.md.
+
+  8. TUN (optional - adds coverage for programs that ignore proxy settings):
+       a. install the service from an ELEVATED shell:
+            powershell -ExecutionPolicy Bypass -File .\install.ps1 -InstallService
+       b. restart the Clash Verge GUI
+       c. set enable_tun_mode AND enable_dns_settings to true TOGETHER
+          (Verge only injects the dns: block when TUN is on), then restart the GUI again
+       d. re-run verify-exit.ps1: the "TUN coverage" row must say PASS
+     In service mode a non-elevated process can no longer stop verge-mihomo, so verify
+     by reloading the profile in the GUI - and the sidecar log stops updating.
+
+  9. Note: the generated runtime config (clash-verge.yaml) contains the proxy password in
+     plain text. That is inherent to mihomo. Keep it machine-local; the secret files in
+     this folder stay gitignored.
 '@

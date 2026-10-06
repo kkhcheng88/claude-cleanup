@@ -60,24 +60,53 @@
 
 ---
 
-## 4. 快速開始（四步）
+## 4. 新機完整流程（照著做即可，已含實測踩過的所有坑）
+
+### 4.0 前置檢查（`install.ps1` 會自動印出）
+
+| 檢查 | 為什麼 |
+|---|---|
+| **其他 VPN / 通道軟體**（Tailscale、WireGuard、OpenVPN…） | ⚠️ 最容易被忽略的變數：**exit node 一旦啟用就會接管全部流量並繞過 Clash**。確認它是登出狀態或沒有啟用 exit node |
+| 使用中的網卡與**預設路由擁有者** | 確認沒有第二個東西在搶路由 |
+| **Clash Verge 服務**是否已安裝 | TUN 的前置（見 4.3） |
+| 是否以**系統管理員**身分執行 | 服務安裝與部分地區設定需要 |
+
+### 4.1 建立本機設定檔
+
+Clash Verge → Profiles → 新增 → **本機（Local）** → 打開一次增強編輯器（Merge / Script / Rules / Proxies / Groups **各存一次**），讓 Verge 產生它的 5 個隨機 uid 檔。
+
+### 4.2 套用設定（Verge 必須完全關閉）
 
 ```powershell
-# 0) 進入這個資料夾
 cd clash-verge-ai-exit
-
-# 1) 在 Clash Verge 建立一個「本機(Local)」設定檔，並打開一次增強編輯器
-#    （Profiles → 新增 → 本機；然後開 Merge / Rules 各存一次，讓 Verge 建立 5 個檔案）
-
-# 2) 完全關閉 Clash Verge（托盤 → 退出），然後執行：
 powershell -ExecutionPolicy Bypass -File .\install.ps1 -IncludeMainProfile
-
-# 3) 開啟 Clash Verge → Profiles → 點設定檔卡片重新載入
-
-# 4) 關閉瀏覽器 QUIC（見第 6 節），然後跑第 7 節的驗證
 ```
 
-也可把值放進本機檔案避免重複輸入：`-SecretsFile .\local-secrets.psd1`（格式見 `install.ps1` 開頭註解；該檔已在 `.gitignore` 內）。
+代理密碼由你親自輸入（或用 `-SecretsFile .\local-secrets.psd1`）。這一步會寫入主設定檔 + 5 個增強檔 + `mobile-clash.yaml`，並自動設定 `enable_system_proxy` 與 `enable_proxy_guard`（fail-closed 的關鍵）。
+
+### 4.3 服務與 TUN（想要「未知程式也覆蓋」就必須做）
+
+在同一個**系統管理員** PowerShell 視窗：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -InstallService
+```
+
+服務安裝器位於 **`C:\Program Files\Clash Verge\resources\clash-verge-service-install.exe`** —— 在 `resources\` 子目錄，**不是**安裝根目錄（這個路徑很容易搞錯）。安裝後服務名為 `clash_verge_service`，狀態 `Running / Automatic`。
+
+### 4.4 重啟 Verge GUI
+
+`verge.yaml` 的修改**只有重啟 GUI 才生效**。
+
+想要 TUN 的話：**`enable_tun_mode` 與 `enable_dns_settings` 必須一起設為 true** —— Verge 只在 TUN 開啟時才注入 `dns:` 區塊，單獨開 DNS 會看起來像沒生效（見第 14 節）。
+
+### 4.5 驗收
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verify-exit.ps1
+```
+
+必須以 `RESULT: all automated checks passed.` 結束。逐項標準見第 7 節。
 
 ---
 
@@ -146,7 +175,8 @@ rules     r4wn3k0RYL4e.yaml                3364
 powershell -ExecutionPolicy Bypass -File .\check-windows-locale.ps1
 ```
 
-它檢查六項：時區、住家位置（GeoId）、系統地區、使用者格式、語言清單（比對「語言＋地區」，所以 `zh-Hant-TW` 會被視為符合 `zh-TW`）、時鐘同步。
+它檢查**四項（列入判定）**：時區、住家位置（GeoId）、系統地區、使用者格式；
+另外**兩項僅供參考**：語言清單、時鐘同步。
 
 全部一致時的輸出：
 
@@ -171,9 +201,21 @@ powershell -ExecutionPolicy Bypass -File .\check-windows-locale.ps1 -Apply
 | 住家位置 | 一般使用者 | 立即 |
 | 系統地區 | **系統管理員** | **需重開機** |
 | 使用者格式 | 一般使用者 | 立即 |
-| 語言清單 | 一般使用者 | **需重新登入**（Windows 可能**靜默忽略**這次變更 —— 若檢查仍顯示 MISMATCH，請到「設定 → 時間與語言 → 語言與地區」手動加入） |
+| 語言清單 | — | **腳本不會改它**（見下方限制），僅供參考、不列入判定 |
 
-（腳本只**新增**缺少的語言，不會移除你原有的語言或改掉顯示語言；所有變更都能在 Windows 設定介面還原。）
+⚠️ **語言清單的兩個 Windows 限制（已實測，不要在這裡浪費時間）**
+
+1. `Set-WinUserLanguageList` 可以**回報成功卻什麼都沒改** —— registry
+   `HKCU\Control Panel\International\User Profile\Languages` 維持原值、不拋任何錯，
+   設定介面甚至可能把目標語言顯示成**灰色不可選**。這是 Windows 行為，不是腳本問題。
+2. **用程式重建語言清單會刪掉輸入法**：新建的 `WinUserLanguage` 物件帶的是該語言的
+   **預設輸入法**，重新送出整份清單會覆蓋使用者原有的 IME
+   （實測案例：使用者的倉頡 profile 被靜默刪除）。
+
+因此 `check-windows-locale.ps1` **完全不碰語言清單**：只回報、不列入 RESULT 判定、`-Apply` 也會跳過它。
+要新增語言請用「設定 → 時間與語言 → 語言與地區」（會保留 IME）。
+
+（腳本不會改動語言清單或顯示語言；時區、住家位置、系統地區、使用者格式的變更都能在 Windows 設定介面還原。）
 
 ---
 
@@ -202,6 +244,47 @@ curl.exe -x http://127.0.0.1:7897 -s -o NUL -w "%{http_code}`n" https://claude.a
 
 ---
 
+### 7.1 一鍵驗收（推薦）
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verify-exit.ps1
+```
+
+它會產出證據並直接給出 PASS／FAIL 表：
+
+| 測試 | 通過標準 | 為什麼是這個測試 |
+|---|---|---|
+| **proxy path** | `ip=` 是代理 IP | 明確／系統代理真的通到出口 |
+| **TUN coverage** | 用 `--noproxy "*"` **繞過所有代理設定**後，`ip=` 仍是代理 IP | ✅ **這是 TUN 唯一有效的驗收方式**（程式不吃代理設定仍能走出口） |
+| **split tunnelling** | 非 AI 網域（`api.ipify.org`）仍是**真實 IP** | 證明沒有過度代理（`MATCH,DIRECT` 生效） |
+| **exit country** | `loc=` 是目標國家 | Cloudflare 眼中出口在哪一國 |
+| **no HTTP/3 via proxy** | `http_version` 不是 `3` | 沒有走 QUIC 旁路 |
+| **DNS (fake-ip)** | `claude.ai` 解析為 `198.18.x` | fake-ip 運作中 |
+| **regional check** | `all settings are consistent` | 裝置與出口國家一致 |
+
+### 7.2 完整驗收清單（缺一不可）
+
+| # | 標準 | 證據 |
+|---|---|---|
+| a | 繞過所有代理設定仍為代理 IP | `verify-exit.ps1` 的 TUN coverage = PASS |
+| b | 經系統／明確代理為代理 IP | proxy path = PASS |
+| c | 非 AI 網域仍為真實 IP | split tunnelling = PASS |
+| d | 所有域名解析成功（fake-ip `198.18.x`） | DNS = PASS |
+| e | **瀏覽器** `claude.ai/cdn-cgi/trace`：`ip=` 代理、`loc=` 正確、`http/2`（非 `http/3`） | 手動（**curl 不能代替瀏覽器**） |
+| f | 地區檢查一致（語言清單不阻擋判定） | `check-windows-locale.ps1` |
+| g | fail-closed：核心停止時**大聲失敗**而非靜默直連 | 見第 14 節 |
+
+### 7.3 「沒有洩漏」的權威證據
+
+優先順序：**mihomo 的 info 日誌行 ＞ GUI 連線頁 ＞ 猜測**。日誌行同時給出程序名、命中規則、群組與節點：
+
+```
+[TCP] 127.0.0.1:58593(msedge.exe) --> claude.ai:443
+      match DomainKeyword(claude) using AI-Exit[ProxySeller-TW1]
+```
+
+看到 `using DIRECT` 就是洩漏。⚠️ 服務模式下 sidecar 日誌會停止更新（見第 14 節）。
+
 ## 8. 疑難排解（依症狀查）
 
 | 症狀 | 真正原因 | 動作 |
@@ -211,6 +294,13 @@ curl.exe -x http://127.0.0.1:7897 -s -o NUL -w "%{http_code}`n" https://claude.a
 | 第一次很慢、之後很快 | 正常：`cf_clearance` 建立中 | 讓它跑完，**不要清 cookie** |
 | 剛剛還好好的，突然不行 | VPN / Stash / CMFA 掉了 → 走真實 IP | 檢查連線狀態；Android 開「封鎖沒有 VPN 的連線」 |
 | 裝置的地區／時區與出口國家不一致 | 訊號互相矛盾 | Windows 跑 `check-windows-locale.ps1`；手機依 `DEVICES.md` 檢查地區／時區 |
+| 服務模式下 `Stop-Process verge-mihomo` 被拒（`Access is denied`） | 核心改由特權服務管理 | 不要用「殺掉核心再重啟」驗證 —— 改用 GUI 重新載入設定檔（見第 14 節） |
+| `logs\sidecar\sidecar_latest.log` 不再更新 | 服務模式的日誌位置不同，`C:\ProgramData\clash-verge-service` 一般權限讀不到 | 改用 Verge「連線」頁。「用日誌確認分流」在服務模式下會**靜默失效**，容易誤判成「沒有流量／沒有洩漏」 |
+| 想用 HTTP API 查 `/connections` 卻連不上 9097 | 生成的 `external-controller` 是**空字串**，API 走 **named pipe** | 用 GUI「連線」頁，或在 Verge 設定中明確開啟 External Controller |
+| 單獨開 `enable_dns_settings` 看起來沒生效 | Verge **只在 TUN 開啟時**才注入 `dns:` 區塊 | `enable_tun_mode` 與 `enable_dns_settings` **一起開**，然後重啟 GUI |
+| 以為 `dns_config.yaml` 的 nameserver 在生效 | 生成的 `dns:` 只有 5 行（enable / ipv6 / enhanced-mode / fake-ip-range ×2），**沒有任何 nameserver** | 別對不存在的風險做決策：此版本 `dns_config.yaml` 形同未使用 |
+| 第一次連新出口出現 TLS 中斷（`SSL UNEXPECTED_EOF_WHILE_READING`） | 出口暖機中 | **重測 2–3 次再判斷**，不要立刻當成故障 |
+| 裝過 Tailscale / WireGuard 等 | exit node 或 subnet route 會接管路由、繞過 Clash | 事前確認已登出或未啟用 exit node（見 4.0） |
 | 設定檔載入失敗 | YAML 語法 / BOM / 規則引用不存在的群組名 | 用 `verge-mihomo -t -f <檔案>` 驗證；確認檔案是 UTF-8 **無 BOM** |
 | 規則沒生效（全部 DIRECT） | 增強檔沒被套用 / 沒重新載入設定檔 | Verge → Profiles → 點設定檔卡片重新載入；用 `show-verge-map.ps1` 確認檔案對應 |
 | 改了 `ipv6` 卻沒生效 | **Verge 會用自己的設定覆蓋頂層鍵**（`ipv6`、`unified-delay`、`dns`、`tun`…） | 別在 Merge 裡改這些；用 Verge 的設定頁 |
@@ -297,8 +387,10 @@ clash-verge-ai-exit/
 ├── SETUP.md                      ← 本文件（主要操作手冊）
 ├── DEVICES.md                    ← iOS / Android / 瀏覽器 / Claude Code / Codex
 ├── AGENTS.md                     ← 給 AI agent 的入口指示
-├── install.ps1                   ★ 安裝腳本（解析 uid、渲染範本、備份、驗證）
+├── install.ps1                   ★ 安裝腳本（前置檢查、解析 uid、渲染範本、備份、驗證）
+├── verify-exit.ps1               ★ 一鍵驗收（TUN 覆蓋、分流、出口國家、HTTP 版本、DNS、地區）
 ├── check-windows-locale.ps1      ← Windows 地區／時區一致性檢查（-Apply 可修正）
+├── proxy-logger.py               ← 只記錄不轉發的代理：驗證某程式是否真的吃代理設定
 ├── show-verge-map.ps1            ← 印出 uid ↔ 角色對應
 ├── proxy-bench.ps1               ← 代理評測
 ├── .gitignore                    ← 排除 local-secrets.psd1 / mobile-clash.yaml / backup-*
@@ -354,3 +446,34 @@ TUN 只決定「**誰被抓進來**」與「**掛掉時怎麼失敗**」；**規
 3. **正常退出**時 Verge 會還原系統代理 → 會顯示真實 IP（這是預期的，因為是你主動關掉）
 4. 想測**崩潰**情境：用工作管理員**強制結束** Verge 程序 → 此時系統代理仍指向死埠 → 瀏覽器應該**連不上**，而不是走真實 IP
 5. 重新啟動 Verge → 重新載入設定檔
+
+### 13.5 三個常見誤解（都被實測推翻過）
+
+| 誤解 | 事實 |
+|---|---|
+| 「TUN 和系統代理是二選一」 | **是疊加**：TUN（覆蓋面）＋ 系統代理／`HTTPS_PROXY`（fail-closed）＋ QUIC 阻擋。只有在「用 TUN **取代**系統代理」時才會犧牲大聲失敗 |
+| 「TUN + 規則比較安全」 | **規則層不會因 TUN 而改善**。TUN 只改變「誰被抓進來」與「掛掉時怎麼失敗」；而且 TUN 開著仍可能發生模式 A 洩漏（實測：`http/3` + `loc=HK`） |
+| 「不開 TUN 一定比較差」 | 不開 TUN 的正當理由是**不想裝系統服務／驅動**（見 13.3）；反之，為了「未知程式也覆蓋」而選擇開 TUN 同樣合理。**重點是決策有據，不是預設哪一邊** |
+
+---
+
+## 14. 服務模式與可觀測性（開 TUN 之後一定要知道）
+
+啟用 Clash Verge 服務（TUN 的前置）後，**核心改由特權服務管理**，行為有四個變化：
+
+| 變化 | 影響 | 你該怎麼做 |
+|---|---|---|
+| **C1：非提權行程無法停止核心** | `Stop-Process verge-mihomo` → `Access is denied`。「殺掉核心再重啟」這類驗證**全部失效** | 用 GUI 重新載入設定檔。不要以為自己重啟成功了 —— 其實核心沒換 |
+| **C2：`verge.yaml` 修改要重啟 GUI 才生效** | 直接改檔案是可行的自動化路徑，但不會即時生效 | 改完 → 重啟 GUI |
+| **C3：sidecar 日誌停止更新** | `%APPDATA%\...\logs\sidecar\sidecar_latest.log` 不再寫入；`C:\ProgramData\clash-verge-service` 一般權限讀不到 | **改用 GUI「連線」頁**。誤用日誌會得到「看起來很乾淨」的假結論 |
+| **C4：`external-controller` 是空字串** | 9097 沒有監聽，HTTP API 全部失效（API 走 named pipe，受限沙盒不可存取） | 用 GUI「連線」頁；或在 Verge 設定中明確開啟 External Controller |
+
+### 14.1 DNS 的兩件事（實測）
+
+- **`enable_dns_settings` 只有在 `enable_tun_mode` 也開啟時才生效** —— Verge 只在 TUN 開啟時注入 `dns:` 區塊。單獨開 DNS 時生成的設定完全沒有 `dns:`，`:53` 也沒監聽，看起來像沒生效。
+- **`dns_config.yaml` 在多數情況下沒有被套用**：即使啟用，生成的 `dns:` 也只有 5 行（`enable` / `ipv6` / `enhanced-mode` / `fake-ip-range` / `fake-ip-range6`），**沒有任何 nameserver**，`dns_config.yaml` 裡的 DoH 供應商全部缺席。**不要對不存在的風險做決策。**
+
+### 14.2 憑證的實情
+
+生成的 runtime config（`clash-verge.yaml`）**含明文代理密碼** —— 這是 mihomo 的必然，不要以為密碼只存在於 `local-secrets.psd1`。
+`.gitignore` 已排除 `local-secrets.psd1` 與 `mobile-clash.yaml`（可用 `git ls-files` 驗證）。

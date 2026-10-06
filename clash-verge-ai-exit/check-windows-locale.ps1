@@ -8,28 +8,41 @@ WHY THIS EXISTS
   signals contradict each other. This script makes the inconsistency visible and, with
   -Apply, fixes it.
 
-WHAT IT CHECKS
+WHAT IT CHECKS (the verdict)
   * Time zone            (default expected: Taipei Standard Time)
   * Home location        (default expected: 237 = Taiwan)
   * System locale        (default expected: zh-TW)
   * User culture/format  (default expected: zh-TW)
-  * User language list   (expected to CONTAIN zh-TW; other languages are kept)
-  * Clock sync status    (informational)
+
+WHAT IT ONLY REPORTS (never blocks the verdict)
+  * User language list   - INFORMATIONAL. See the two Windows limitations below.
+  * Clock sync status    - informational.
+
+KNOWN WINDOWS LIMITATIONS (verified on real machines - do not waste time here)
+  1. Set-WinUserLanguageList can report success and change nothing. The registry key
+     HKCU\Control Panel\International\User Profile\Languages simply keeps the old
+     value and no error is raised; the Settings UI can show the wanted language as
+     visible but greyed out. This is Windows behaviour, not a script bug.
+  2. Writing a language list is DESTRUCTIVE if done naively: a freshly created
+     WinUserLanguage object carries the DEFAULT input methods for that language, so
+     re-sending the list overwrites the user's real IME list (for example a Cangjie
+     profile disappears). This is why this script does NOT touch the language list at
+     all - not even with -Apply. Add languages in
+     Settings > Time & Language > Language & region, which preserves IMEs.
+  Because of (1) and (2), the language list is reported but never affects RESULT.
 
 USAGE
   # check only (safe, changes nothing)
   powershell -ExecutionPolicy Bypass -File .\check-windows-locale.ps1
 
-  # check and fix (run as Administrator for the time zone change)
+  # check and fix time zone / home location / system locale / user culture
   powershell -ExecutionPolicy Bypass -File .\check-windows-locale.ps1 -Apply
 
 NOTES
-  * Time zone and system locale changes are machine-wide. Depending on the Windows
-    build and policy they may require Administrator rights - on some Windows 11
-    machines a standard user can change the time zone. -Apply reports clearly when
-    a change fails and suggests re-running elevated.
-  * System locale changes take effect after a reboot; language list changes after a
-    sign-out. The script tells you what still needs a restart.
+  * System locale needs a reboot; time zone and home location apply immediately.
+  * Time zone and system locale changes are machine-wide and MAY require Administrator
+    rights depending on the Windows build and policy - on some Windows 11 machines a
+    standard user can change the time zone. -Apply reports clearly when a change fails.
   * Everything here is reversible in the Windows settings UI.
 #>
 param(
@@ -88,7 +101,7 @@ $cul = (Get-Culture).Name
 $ok = ($cul -eq $Locale); if (-not $ok) { $mismatch++ }
 Write-Row 'User culture (formats)' $cul $ok $Locale
 
-# ---- user language list (must contain, not equal) ------------------------
+# ---- user language list: INFORMATIONAL ONLY ------------------------------
 # A tag matches when language and region match, ignoring the script subtag:
 # zh-TW and zh-Hant-TW both mean "Chinese, Taiwan".
 function Test-LocaleTag([string]$tag, [string]$wanted) {
@@ -101,14 +114,20 @@ function Test-LocaleTag([string]$tag, [string]$wanted) {
 $langs = @()
 try { $langs = @((Get-WinUserLanguageList) | ForEach-Object { $_.LanguageTag }) } catch { }
 $langsText = ($langs -join ', ')
-if ($langsText -eq '') { $langsText = '<error>' }
+if ($langsText -eq '') { $langsText = '<unavailable>' }
 
 $hasLocale = $false
 foreach ($l in $langs) { if (Test-LocaleTag $l $Locale) { $hasLocale = $true } }
-if (-not $hasLocale) { $mismatch++ }
-Write-Host ("  {0} {1,-22} current: {2,-34} expected: {3}" -f `
-  $(if ($hasLocale) { 'OK       ' } else { 'MISMATCH ' }), 'Language list', $langsText, "contains $Locale") `
-  -ForegroundColor $(if ($hasLocale) { 'Green' } else { 'Yellow' })
+
+$langStatus = if ($hasLocale) { 'INFO     ' } else { 'NOTE     ' }
+$langColor  = if ($hasLocale) { 'DarkGray' } else { 'DarkYellow' }
+Write-Host ("  {0} {1,-22} current: {2,-34} expected: {3}" -f $langStatus, 'Language list', $langsText, "contains $Locale (informational)") -ForegroundColor $langColor
+if (-not $hasLocale) {
+  Write-Host '           Windows often refuses this change silently (documented limitation),' -ForegroundColor DarkGray
+  Write-Host '           and writing it programmatically can delete existing IMEs. If you want' -ForegroundColor DarkGray
+  Write-Host '           it anyway, add the language in Settings > Time & Language >' -ForegroundColor DarkGray
+  Write-Host '           Language & region. It does NOT affect RESULT.' -ForegroundColor DarkGray
+}
 
 # ---- clock sync (informational) ------------------------------------------
 $w32 = ''
@@ -134,17 +153,20 @@ if (-not $Apply) {
 }
 
 # ---- apply ---------------------------------------------------------------
+# The user language list is deliberately NOT changed here: Windows may ignore it
+# silently, and rebuilding the list overwrites existing input methods (IMEs).
 Write-Host ''
-Write-Host '=== applying ===' -ForegroundColor Cyan
+Write-Host '=== applying (language list is never touched) ===' -ForegroundColor Cyan
 $needsReboot = $false
-$needsSignOut = $false
+$failed = 0
 
 if ($tz -ne $TimeZoneId) {
   try {
     Set-TimeZone -Id $TimeZoneId
     Write-Host ("  time zone     -> {0}" -f $TimeZoneId) -ForegroundColor Green
   } catch {
-    Write-Host ("  time zone     -> FAILED: {0} (run as Administrator)" -f $_.Exception.Message) -ForegroundColor Red
+    $failed++
+    Write-Host ("  time zone     -> FAILED: {0} (try again elevated)" -f $_.Exception.Message) -ForegroundColor Red
   }
 }
 
@@ -153,6 +175,7 @@ if ($hl -ne $HomeLocation) {
     Set-WinHomeLocation -GeoId $HomeLocation
     Write-Host ("  home location -> {0}" -f $HomeLocation) -ForegroundColor Green
   } catch {
+    $failed++
     Write-Host ("  home location -> FAILED: {0}" -f $_.Exception.Message) -ForegroundColor Red
   }
 }
@@ -163,7 +186,8 @@ if ($sl -ne $Locale) {
     $needsReboot = $true
     Write-Host ("  system locale -> {0} (takes effect after reboot)" -f $Locale) -ForegroundColor Green
   } catch {
-    Write-Host ("  system locale -> FAILED: {0} (run as Administrator)" -f $_.Exception.Message) -ForegroundColor Red
+    $failed++
+    Write-Host ("  system locale -> FAILED: {0} (try again elevated)" -f $_.Exception.Message) -ForegroundColor Red
   }
 }
 
@@ -172,34 +196,18 @@ if ($cul -ne $Locale) {
     Set-Culture -CultureInfo $Locale
     Write-Host ("  user culture  -> {0}" -f $Locale) -ForegroundColor Green
   } catch {
+    $failed++
     Write-Host ("  user culture  -> FAILED: {0}" -f $_.Exception.Message) -ForegroundColor Red
   }
 }
 
 if (-not $hasLocale) {
-  # NOTE: @(Get-WinUserLanguageList) returns a FIXED-SIZE object[] that wraps the list
-  # as a single element, so calling .Add() on it always throws
-  # "collection is of a fixed size". Build a mutable ArrayList instead, keep the
-  # existing order (the first entry is the display language) and append the new
-  # locale at the end.
-  try {
-    $flat = New-Object System.Collections.ArrayList
-    foreach ($x in (Get-WinUserLanguageList)) { [void]$flat.Add($x) }
-    foreach ($x in (New-WinUserLanguageList $Locale)) { [void]$flat.Add($x) }
-    Set-WinUserLanguageList -LanguageList $flat.ToArray() -Force
-    $needsSignOut = $true
-    Write-Host ("  language list -> appended {0} (takes effect after sign-out)" -f $Locale) -ForegroundColor Green
-    Write-Host '                   NOTE: Windows may silently ignore this call. Re-run the check' -ForegroundColor DarkGray
-    Write-Host '                   to confirm; if it still reports MISMATCH, add the language' -ForegroundColor DarkGray
-    Write-Host '                   manually in Settings > Time & Language > Language & region.' -ForegroundColor DarkGray
-  } catch {
-    Write-Host ("  language list -> FAILED: {0}" -f $_.Exception.Message) -ForegroundColor Red
-    Write-Host '                   Fallback: add the language manually in Settings > Time &' -ForegroundColor DarkGray
-    Write-Host '                   Language > Language & region.' -ForegroundColor DarkGray
-  }
+  Write-Host '  language list -> SKIPPED ON PURPOSE' -ForegroundColor DarkYellow
+  Write-Host '                   (Windows ignores it silently and rebuilding the list can' -ForegroundColor DarkGray
+  Write-Host '                    delete existing IMEs - add it in Settings if you want it)' -ForegroundColor DarkGray
 }
 
 Write-Host ''
+if ($failed -gt 0) { Write-Host ("  {0} change(s) failed - retry from an elevated PowerShell." -f $failed) -ForegroundColor Yellow }
 if ($needsReboot)  { Write-Host '  A REBOOT is required for the system locale change.' -ForegroundColor Yellow }
-if ($needsSignOut) { Write-Host '  A SIGN-OUT (or reboot) is required for the language list change.' -ForegroundColor Yellow }
 Write-Host '  Re-run this script without -Apply to confirm everything is consistent.' -ForegroundColor Cyan

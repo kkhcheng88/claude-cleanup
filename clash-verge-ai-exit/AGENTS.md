@@ -57,7 +57,7 @@
 | **用域名規則修「企業 OneDrive 卡在登入」** | 那是**擷取層**問題（AppContainer loopback 隔離），規則引擎只在連上代理後才執行 → 任何 `DOMAIN-*` 調整都無效。正解是 `fix-uwp-loopback.ps1 -Apply`（見 `SETUP.md` 第 14.2 節） |
 | 用 `CheckNetIsolation ... -n=$var`（未加引號）就相信結果 | 必須透過 cmd.exe 帶 `-n="..."`；而且**印「成功」不等於註冊成功** —— 要用 `-s` 驗證「每筆 SID 不同」 |
 | 把付款表單失敗當成需要「加規則塞進 AI 出口」 | 反過來：`Failed to load the payment form` 的實測根因是**出口拿不到 Stripe 的內容**（CONNECT 200 但 curl 000）。正解是把 Stripe 改成 **DIRECT**（範本預設已是），因為帳單國家由卡片決定、付款不需要 AI 出口 |
-| 只用「CONNECT 成功」就判定一條線路可用 | CONNECT 只證明 TCP 可達。要驗證**內容**必須實際抓取（例如 `curl https://js.stripe.com/v3/` 要 200 且數百 KB）。這次就是靠內容層測試才找到真因 |
+| 只用「CONNECT 成功」就判定一條線路可用 | **mihomo 的 `200 Connection established` 是樂觀回應** —— 對不存在的域名（`nonexistent-zzz.invalid`）與不可路由位址（`192.0.2.1`）也照回 200（已實測），所以它**完全不能**當成可達性證據。驗證必須實際抓取內容（`curl https://js.stripe.com/v3/` 要 200 且數百 KB）—— 這次就是靠內容層測試才找到真因 |
 
 ## 修改設定後的必要動作
 

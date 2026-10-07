@@ -306,6 +306,7 @@ powershell -ExecutionPolicy Bypass -File .\verify-exit.ps1
 | `Get-Process` 顯示 Verge 沒在執行，但其實在跑 | **受限的 shell 看不到其他程序**（實測踩過：因此改了 `verge.yaml` 卻完全沒生效） | 也檢查 `logs\latest.log` 的修改時間；`install.ps1` 現在會用日誌時間做第二個判斷。**改 `verge.yaml` 前務必確認 Verge 真的關閉，改完要重啟 GUI**（C2） |
 | 驗收腳本顯示 `no HTTP/3 via proxy = INFO` | **此 shell 沒有 HTTPS 出口**（HTTP 可用、HTTPS 回空） | `verify-exit.ps1` 的 IP／出口國家測試已改用 HTTP，所以仍可判定；HTTP/3 只能在有 HTTPS 的 shell 測 |
 | **企業／學校 OneDrive 永遠卡在「正在登入」**（個人 OneDrive 正常；**關掉 Clash 就正常**） | **AppContainer loopback 隔離**：UWP 沙盒預設禁止連 `127.0.0.1`，而企業登入走的 WAM broker（`Microsoft.AAD.BrokerPlugin`）正是 AppContainer → 連不到本地代理 → 無聲卡住。**擷取層問題，加任何域名規則都無效** | 系統管理員跑 `fix-uwp-loopback.ps1 -Apply`，然後登出／重開。詳見第 14.2 節 |
+| **付款表單載入失敗**（`Failed to load the payment form` / `Failed to load Stripe.js`，瀏覽器與 Claude Desktop 都一樣） | 出口**連得上** Stripe 但**拿不到內容**：TCP 隧道成功、TLS／內容階段失敗（實測 `CONNECT` = `200 Connection established`，但 `curl https://js.stripe.com/v3/` = **`000` / 0 bytes / 5 s**）。付款**不需要** AI 出口 —— 帳單國家由**卡片**決定，不是 IP | 把 Stripe 改成直連（本套件範本預設已是 `DIRECT`）：`DOMAIN-SUFFIX,stripe.com,DIRECT` + `DOMAIN-SUFFIX,stripe.network,DIRECT` → 重新載入設定檔。診斷：`curl.exe -x http://127.0.0.1:7897 -s -o NUL -w "%{http_code} %{size_download}" https://js.stripe.com/v3/`（正常 = 200 且數百 KB） |
 | 設定檔載入失敗 | YAML 語法 / BOM / 規則引用不存在的群組名 | 用 `verge-mihomo -t -f <檔案>` 驗證；確認檔案是 UTF-8 **無 BOM** |
 | 規則沒生效（全部 DIRECT） | 增強檔沒被套用 / 沒重新載入設定檔 | Verge → Profiles → 點設定檔卡片重新載入；用 `show-verge-map.ps1` 確認檔案對應 |
 | 改了 `ipv6` 卻沒生效 | **Verge 會用自己的設定覆蓋頂層鍵**（`ipv6`、`unified-delay`、`dns`、`tun`…） | 別在 Merge 裡改這些；用 Verge 的設定頁 |

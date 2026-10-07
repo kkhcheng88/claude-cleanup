@@ -58,7 +58,6 @@ prepend:
   # in Claude Desktop. Sending Stripe direct fixes it.
   - DOMAIN-SUFFIX,stripe.com,DIRECT
   - DOMAIN-SUFFIX,stripe.network,DIRECT
-  - DOMAIN-SUFFIX,stripe.network,DIRECT
 
 append: []
 delete: []

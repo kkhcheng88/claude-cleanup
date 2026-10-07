@@ -94,8 +94,10 @@ rules:
   - DOMAIN-SUFFIX,cloudflarechallenge.com,AI-Exit
   - DOMAIN-SUFFIX,cloudflareinsights.com,AI-Exit
   - DOMAIN-SUFFIX,hcaptcha.com,AI-Exit
-  - DOMAIN-SUFFIX,stripe.com,AI-Exit
-  - DOMAIN-SUFFIX,stripe.network,AI-Exit
+  # Stripe goes DIRECT: the checkout needs no AI exit (the card sets the billing
+  # country) and some exits fail the TLS/content fetch for js.stripe.com.
+  - DOMAIN-SUFFIX,stripe.com,DIRECT
+  - DOMAIN-SUFFIX,stripe.network,DIRECT
 
   # Test helper
   - DOMAIN-KEYWORD,ipinfo,AI-Exit

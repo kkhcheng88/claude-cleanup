@@ -50,8 +50,15 @@ prepend:
   - DOMAIN-SUFFIX,cloudflarechallenge.com,AI-Exit
   - DOMAIN-SUFFIX,cloudflareinsights.com,AI-Exit
   - DOMAIN-SUFFIX,hcaptcha.com,AI-Exit
-  - DOMAIN-SUFFIX,stripe.com,AI-Exit                        # subscription checkout
-  - DOMAIN-SUFFIX,stripe.network,AI-Exit                    # Stripe risk / 3DS
+  # ---------- 6. Stripe: DIRECT ----------
+  # The checkout does NOT need the AI exit: the billing country comes from the CARD,
+  # not from the IP. Some exits can establish the TCP tunnel but fail the TLS/content
+  # fetch for js.stripe.com (measured: CONNECT = 200 established, curl = 000 / 0 bytes
+  # after 5 s), which surfaces as "Failed to load the payment form" in the browser and
+  # in Claude Desktop. Sending Stripe direct fixes it.
+  - DOMAIN-SUFFIX,stripe.com,DIRECT
+  - DOMAIN-SUFFIX,stripe.network,DIRECT
+  - DOMAIN-SUFFIX,stripe.network,DIRECT
 
 append: []
 delete: []
